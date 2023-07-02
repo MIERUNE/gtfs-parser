@@ -2,16 +2,15 @@ import json
 import os
 import zipfile
 import tempfile
+import argparse
+import shutil
 
 from .gtfs import GTFS
 from .parse import read_routes, read_stops
 from .aggregate import Aggregator
 
 
-if __name__ == "__main__":
-    import argparse
-    import shutil
-
+def load_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("mode")
     parser.add_argument("src")
@@ -24,7 +23,10 @@ if __name__ == "__main__":
     parser.add_argument("--aggregate_begintime")
     parser.add_argument("--aggregate_endtime")
     args = parser.parse_args()
+    return args
 
+
+def validate_args(args):
     if args.aggregate_yyyymmdd:
         if len(args.aggregate_yyyymmdd) != 8:
             raise RuntimeError(
@@ -47,6 +49,11 @@ if __name__ == "__main__":
             )
         if not args.aggregate_begintime:
             raise RuntimeError("begintime is not set.")
+
+
+if __name__ == "__main__":
+    args = load_args()
+    validate_args(args)
 
     if args.src.endswith(".zip"):  # TODO: wiser checking
         print("extracting zipfile...")
