@@ -43,7 +43,7 @@ optional arguments:
 
 ```sh
 python -m gtfs_parser parse gtfs.zip output
-python -m gtfs_parser parse gtfs.zip output --parse_ignoreshapes
+python -m gtfs_parser parse gtfs_dir output --parse_ignoreshapes
 python -m gtfs_parser aggregate gtfs.zip output
-python -m gtfs_parser aggregate gtfs.zip output --aggregate_nounifystops
+python -m gtfs_parser aggregate gtfs_dir output --aggregate_nounifystops
 ```
