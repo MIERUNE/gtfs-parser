@@ -20,8 +20,9 @@ class Aggregator:
         end_time="",
     ):
         self.gtfs = gtfs
+        self.similar_stops_df = None
 
-        self.similar_stops_df = self.__aggregate_similar_stops(
+        self.__aggregate_similar_stops(
             delimiter,
             max_distance_degree,
             no_unify_stops,
@@ -39,6 +40,9 @@ class Aggregator:
         begin_time="",
         end_time="",
     ):
+        """
+        this method occurs side-effect to modify self.gtfs and self.similar_stops_df
+        """
         # filter stop_times by whether serviced or not
         if yyyymmdd:
             trips_filtered_by_day = self.__get_trips_on_a_date(yyyymmdd)
@@ -72,7 +76,7 @@ class Aggregator:
                 ["stop_lon", "stop_lat"]
             ].values.tolist()
             self.gtfs["stops"]["position_count"] = 1
-            similar_stops_df = self.gtfs["stops"][
+            self.similar_stops_df = self.gtfs["stops"][
                 [
                     "similar_stop_id",
                     "similar_stop_name",
@@ -120,7 +124,7 @@ class Aggregator:
             )
             position_count.columns = ["position_id", "position_count"]
 
-            similar_stops_df = pd.merge(
+            self.similar_stops_df = pd.merge(
                 self.gtfs["stops"].drop_duplicates(subset="position_id")[
                     [
                         "position_id",
@@ -133,8 +137,6 @@ class Aggregator:
                 on="position_id",
                 how="left",
             )
-
-        return similar_stops_df
 
     @lru_cache(maxsize=None)
     def __get_similar_stop_tuple(
