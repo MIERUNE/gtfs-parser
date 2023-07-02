@@ -3,7 +3,8 @@ import os
 
 import pandas as pd
 
-def _load_tables(gtfs_dir: list) -> dict:
+
+def GTFS(gtfs_dir: list) -> dict:
     tables = {}
     table_files = glob.glob(os.path.join(gtfs_dir, "*.txt"))
     for table_file in table_files:
@@ -14,7 +15,7 @@ def _load_tables(gtfs_dir: list) -> dict:
                 print(f"{datatype}.txt is empty, skipping...")
                 continue
             tables[datatype] = df
-    
+
     # cast some numeric columns from str to numeric
     tables["stops"] = tables["stops"].astype({"stop_lon": float, "stop_lat": float})
     tables["stop_times"] = tables["stop_times"].astype({"stop_sequence": int})
@@ -29,6 +30,3 @@ def _load_tables(gtfs_dir: list) -> dict:
         tables["stops"]["parent_station"] = "nan"
 
     return tables
-
-def GTFS(gtfs_dir:str) -> dict:
-    return _load_tables(gtfs_dir)
