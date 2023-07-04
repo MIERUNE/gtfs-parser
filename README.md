@@ -17,7 +17,7 @@ TODO
 ## CLI
 
 ```
-usage: __main__.py [-h] [--parse_ignoreshapes] [--parse_ignorenoroute]
+usage: gtfs-parser [-h] [--parse_ignoreshapes] [--parse_ignorenoroute]
                    [--aggregate_yyyymmdd AGGREGATE_YYYYMMDD]
                    [--aggregate_nounifystops]
                    [--aggregate_delimiter AGGREGATE_DELIMITER]
@@ -44,8 +44,8 @@ optional arguments:
 ### Example
 
 ```sh
-python -m gtfs-parser parse gtfs.zip output
-python -m gtfs-parser parse gtfs_dir output --parse_ignoreshapes
-python -m gtfs-parser aggregate gtfs.zip output
-python -m gtfs-parser aggregate gtfs_dir output --aggregate_nounifystops
+gtfs-parser parse gtfs.zip output
+gtfs-parser parse gtfs_dir output --parse_ignoreshapes
+gtfs-parser aggregate gtfs.zip output
+gtfs-parser aggregate gtfs_dir output --aggregate_nounifystops
 ```
