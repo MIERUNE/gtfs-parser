@@ -61,7 +61,7 @@ def main():
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
         os.mkdir(temp_dir)
-        with zipfile.ZipFile(args.zip) as z:
+        with zipfile.ZipFile(args.src) as z:
             z.extractall(temp_dir)
         output_dir = temp_dir
     else:
