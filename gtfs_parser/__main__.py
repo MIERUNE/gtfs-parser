@@ -51,7 +51,7 @@ def validate_args(args):
             raise RuntimeError("begintime is not set.")
 
 
-if __name__ == "__main__":
+def main():
     args = load_args()
     validate_args(args)
 
@@ -122,3 +122,7 @@ if __name__ == "__main__":
             json.dump(stops_geojson, f, ensure_ascii=False)
     else:
         raise RuntimeError("mode must be 'parse' or 'aggregate")
+
+
+if __name__ == "__main__":
+    main()
