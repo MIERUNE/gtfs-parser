@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gtfs_parser"
-version = "0.1.1"
+version = "0.1.2"
 description = "parse and aggregate GTFS"
 authors = ["MIERUNE Inc.", "Kanahiro IGUCHI"]
 license = "MIT"
@@ -19,4 +19,4 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-gtfs-parser = "gtfs_parser.__main__:main"
+gtfs_parser = "gtfs_parser.__main__:main"
