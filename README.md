@@ -6,7 +6,9 @@ MIT License
 
 ## Installation
 
-TODO
+```sh
+pip install gtfs-parser
+```
 
 ## API
 
@@ -42,8 +44,8 @@ optional arguments:
 ### Example
 
 ```sh
-python -m gtfs_parser parse gtfs.zip output
-python -m gtfs_parser parse gtfs_dir output --parse_ignoreshapes
-python -m gtfs_parser aggregate gtfs.zip output
-python -m gtfs_parser aggregate gtfs_dir output --aggregate_nounifystops
+python -m gtfs-parser parse gtfs.zip output
+python -m gtfs-parser parse gtfs_dir output --parse_ignoreshapes
+python -m gtfs-parser aggregate gtfs.zip output
+python -m gtfs-parser aggregate gtfs_dir output --aggregate_nounifystops
 ```
