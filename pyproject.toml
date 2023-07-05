@@ -5,7 +5,7 @@ description = "parse and aggregate GTFS"
 authors = ["MIERUNE Inc.", "Kanahiro IGUCHI"]
 license = "MIT"
 homepage = "https://github.com/MIERUNE"
-repository = "https://github.com/MIERUNE/{project-name}"
+repository = "https://github.com/MIERUNE/gtfs-parser"
 readme = "README.md"
 packages = [{include = "gtfs_parser"}]
 
