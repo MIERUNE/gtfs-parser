@@ -4,7 +4,7 @@ import os
 import pandas as pd
 
 
-def GTFS(gtfs_dir: list) -> dict:
+def GTFS(gtfs_dir: str) -> dict:
     tables = {}
     table_files = glob.glob(os.path.join(gtfs_dir, "*.txt"))
     for table_file in table_files:
