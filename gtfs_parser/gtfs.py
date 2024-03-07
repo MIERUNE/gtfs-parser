@@ -26,8 +26,9 @@ def GTFS(gtfs_dir: str) -> dict:
         try:
             with zipfile.ZipFile(path) as z:
                 for file_name in z.namelist():
-                    with z.open(file_name) as f:
-                        append_table(f, file_name, tables)
+                    if file_name.endswith(".txt"):
+                        with z.open(file_name) as f:
+                            append_table(f, file_name, tables)
         except Exception as e:
             print(f"zip file read error({path}: {str(e)}")
             raise e
