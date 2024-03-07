@@ -41,9 +41,14 @@ def GTFS(gtfs_dir: str) -> dict:
             {"shape_pt_lon": float, "shape_pt_lat": float, "shape_pt_sequence": int}
         )
 
-    # parent_station is optional column on GTFS but use in this module
-    # when parent_station is not in stops, fill by 'nan' (not NaN)
-    if "parent_station" not in tables.get("stops").columns:
-        tables["stops"]["parent_station"] = "nan"
+    # Set null values on optional columns used in this module.
+    null_columns = {
+        ("stops", "parent_station"): "nan",
+        ("agency", "agency_id"): None,
+    }
+    for key, value in null_columns.items():
+        table, col = key
+        if table in tables and col not in tables[table].columns:
+            tables[table][col] = value
 
     return tables
