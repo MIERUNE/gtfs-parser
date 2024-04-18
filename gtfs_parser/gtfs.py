@@ -8,9 +8,6 @@ import io
 def append_table(f: io.BufferedIOBase, table_path: str, table_dfs: dict):
     datatype = os.path.splitext(os.path.basename(table_path))[0]
     df = pd.read_csv(f, dtype=str)
-    if len(df) == 0:
-        print(f"{datatype}.txt is empty, skipping...")
-        pass
     table_dfs[datatype] = df
 
 
@@ -23,6 +20,9 @@ def GTFS(gtfs_dir: str) -> dict:
             with open(table_file, encoding="utf-8_sig") as f:
                 append_table(f, table_file, tables)
     else:
+        if not os.path.isfile(path):
+            print(f"zip file not found. ({path})")
+            return None
         try:
             with zipfile.ZipFile(path) as z:
                 for file_name in z.namelist():
@@ -30,8 +30,8 @@ def GTFS(gtfs_dir: str) -> dict:
                         with z.open(file_name) as f:
                             append_table(f, file_name, tables)
         except Exception as e:
-            print(f"zip file read error({path}: {str(e)}")
-            raise e
+            print(f"zip file read error. ({path}: {str(e)})")
+            return None
 
     # cast some numeric columns from str to numeric
     tables["stops"] = tables["stops"].astype({"stop_lon": float, "stop_lat": float})
