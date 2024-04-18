@@ -44,13 +44,18 @@ def GTFS(gtfs_dir: str) -> dict:
         print(f"there are missing required files({','.join(missing_tables)}).")
         return None
 
-    # cast some numeric columns from str to numeric
-    tables["stops"] = tables["stops"].astype({"stop_lon": float, "stop_lat": float})
-    tables["stop_times"] = tables["stop_times"].astype({"stop_sequence": int})
-    if tables.get("shapes") is not None:
-        tables["shapes"] = tables["shapes"].astype(
-            {"shape_pt_lon": float, "shape_pt_lat": float, "shape_pt_sequence": int}
-        )
+    # cast some columns
+    cast_columns = {
+        "stops": {"stop_lon": float, "stop_lat": float},
+        "stop_times": {"stop_sequence": int},
+        "shapes": {"shape_pt_lon": float, "shape_pt_lat": float, "shape_pt_sequence": int},
+        "calendar": {"service_id": str},
+        "calendar_dates": {"service_id": str},
+        "trips": {"service_id": str},
+    }
+    for table, casts in cast_columns.items():
+        if table in tables:
+            tables[table] = tables[table].astype(casts)
 
     # Set null values on optional columns used in this module.
     null_columns = {
