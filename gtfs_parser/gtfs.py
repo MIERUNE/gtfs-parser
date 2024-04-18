@@ -61,6 +61,7 @@ def GTFS(gtfs_dir: str) -> dict:
     null_columns = {
         ("stops", "parent_station"): "nan",
         ("agency", "agency_id"): None,
+        ("routes", "agency_id"): None,
     }
     for key, value in null_columns.items():
         table, col = key
