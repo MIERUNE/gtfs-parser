@@ -26,12 +26,23 @@ def GTFS(gtfs_dir: str) -> dict:
         try:
             with zipfile.ZipFile(path) as z:
                 for file_name in z.namelist():
-                    if file_name.endswith(".txt"):
+                    if file_name.endswith(".txt") and os.path.basename(file_name) == file_name:
                         with z.open(file_name) as f:
                             append_table(f, file_name, tables)
         except Exception as e:
             print(f"zip file read error. ({path}: {str(e)})")
             return None
+
+    # check files.
+    if len(tables) == 0:
+        print("txt files must reside at the root level directly, not in a sub folder.")
+        return None
+
+    required_tables = {"agency", "stops", "routes", "trips", "stop_times"}
+    missing_tables = [req for req in required_tables if req not in tables]
+    if len(missing_tables) > 0:
+        print(f"there are missing required files({','.join(missing_tables)}).")
+        return None
 
     # cast some numeric columns from str to numeric
     tables["stops"] = tables["stops"].astype({"stop_lon": float, "stop_lat": float})
