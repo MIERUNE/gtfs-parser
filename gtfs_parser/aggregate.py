@@ -413,17 +413,22 @@ class Aggregator:
             .lower()
         )
 
-        # filter services by day
-        calendar_df = self.gtfs["calendar"].copy()
-        calendar_df = calendar_df.astype({"start_date": int, "end_date": int})
-        calendar_df = calendar_df[calendar_df[day_of_week] == "1"]
-        calendar_df = calendar_df.query(
-            f"start_date <= {int(yyyymmdd)} and {int(yyyymmdd)} <= end_date",
-            engine="python",
-        )
+        # filter services by calendar
+        calendar_df = self.gtfs.get("calendar")
+        if calendar_df is None:
+            # generate an empty series if calendar.txt is missing because it is not required.
+            services_on_a_day = pd.Series(name="service_id", dtype=str)
+        else:
+            calendar_df = calendar_df.copy()
+            calendar_df = calendar_df.astype({"start_date": int, "end_date": int})
+            calendar_df = calendar_df[calendar_df[day_of_week] == "1"]
+            calendar_df = calendar_df.query(
+                f"start_date <= {int(yyyymmdd)} and {int(yyyymmdd)} <= end_date",
+                engine="python",
+            )
+            services_on_a_day = calendar_df["service_id"]
 
-        services_on_a_day = calendar_df[["service_id"]]
-
+        # filter services by dates
         calendar_dates_df = self.gtfs.get("calendar_dates")
         if calendar_dates_df is not None:
             filtered = calendar_dates_df[calendar_dates_df["date"] == yyyymmdd][
