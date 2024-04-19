@@ -48,15 +48,15 @@ def GTFS(gtfs_dir: str) -> dict:
             tables[table] = tables[table].astype(casts)
 
     # Set null values on optional columns used in this module.
-    null_columns = {
-        "stops": {"parent_station"},
-        "agency": {"agency_id"},
-        "routes": {"agency_id"},
-    }
-    for table, columns in null_columns.items():
-        if table in tables:
-            for col in columns:
-                if col not in tables[table].columns:
-                    tables[table][col] = None
+    if "parent_station" not in tables["stops"].columns:
+        tables["stops"]["parent_station"] = None
+
+    # set agency_id when there is a single agency
+    agency_df = tables["agency"]
+    if len(agency_df) == 1:
+        if "agency_id" not in agency_df.columns or pd.isnull(agency_df["agency_id"].iloc[0]):
+            agency_df["agency_id"] = ""
+        agency_id = agency_df['agency_id'].iloc[0]
+        tables["routes"]["agency_id"] = agency_id
 
     return tables
