@@ -53,8 +53,6 @@ def main():
     validate_args(args)
 
     gtfs = GTFS(args.src)
-    if not gtfs:
-        raise RuntimeError("GTFS is not loaded.")
     print("GTFS loaded.")
 
     os.makedirs(args.dst, exist_ok=True)
