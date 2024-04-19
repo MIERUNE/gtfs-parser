@@ -42,9 +42,6 @@ def GTFS(gtfs_dir: str) -> dict:
         "stops": {"stop_lon": float, "stop_lat": float},
         "stop_times": {"stop_sequence": int},
         "shapes": {"shape_pt_lon": float, "shape_pt_lat": float, "shape_pt_sequence": int},
-        "calendar": {"service_id": str},
-        "calendar_dates": {"service_id": str},
-        "trips": {"service_id": str},
     }
     for table, casts in cast_columns.items():
         if table in tables:
@@ -52,13 +49,14 @@ def GTFS(gtfs_dir: str) -> dict:
 
     # Set null values on optional columns used in this module.
     null_columns = {
-        ("stops", "parent_station"): "nan",
-        ("agency", "agency_id"): None,
-        ("routes", "agency_id"): None,
+        "stops": {"parent_station"},
+        "agency": {"agency_id"},
+        "routes": {"agency_id"},
     }
-    for key, value in null_columns.items():
-        table, col = key
-        if table in tables and col not in tables[table].columns:
-            tables[table][col] = value
+    for table, columns in null_columns.items():
+        if table in tables:
+            for col in columns:
+                if col not in tables[table].columns:
+                    tables[table][col] = None
 
     return tables
