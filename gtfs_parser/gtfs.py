@@ -7,7 +7,7 @@ import io
 
 def append_table(f: io.BufferedIOBase, table_path: str, table_dfs: dict):
     datatype = os.path.splitext(os.path.basename(table_path))[0]
-    df = pd.read_csv(f, dtype=str)
+    df = pd.read_csv(f, dtype=str, keep_default_na=False, na_values={""})
     table_dfs[datatype] = df
 
 
