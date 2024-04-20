@@ -11,11 +11,19 @@ def append_table(f: io.BufferedIOBase, table_path: str, table_dfs: dict):
     table_dfs[datatype] = df
 
 
-def GTFS(gtfs_dir: str) -> dict:
+def GTFS(gtfs_path: str) -> dict:
+    """
+    read GTFS file to memory.
+
+    Args:
+        path of zip file or directory containing txt files.
+    Returns:
+        dict: tables
+    """
     tables = {}
-    path = os.path.join(gtfs_dir)
+    path = os.path.join(gtfs_path)
     if os.path.isdir(path):
-        table_files = glob.glob(os.path.join(gtfs_dir, "*.txt"))
+        table_files = glob.glob(os.path.join(gtfs_path, "*.txt"))
         for table_file in table_files:
             with open(table_file, encoding="utf-8_sig") as f:
                 append_table(f, table_file, tables)
