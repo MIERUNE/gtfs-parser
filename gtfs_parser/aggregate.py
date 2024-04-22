@@ -45,16 +45,9 @@ class Aggregator:
         """
         # filter stop_times by whether serviced or not
         if yyyymmdd:
-            trips_filtered_by_day = self.__get_trips_on_a_date(yyyymmdd)
-            self.gtfs["stop_times"] = pd.merge(
-                self.gtfs["stop_times"],
-                trips_filtered_by_day,
-                on="trip_id",
-                how="left",
-            )
-            self.gtfs["stop_times"] = self.gtfs["stop_times"][
-                self.gtfs["stop_times"]["service_flag"] == 1
-            ]
+            trip_ids_filtered_by_day = self.__get_trips_on_a_date(yyyymmdd)
+            stop_times_df = self.gtfs["stop_times"]
+            self.gtfs["stop_times"] = stop_times_df[stop_times_df["trip_id"].isin(trip_ids_filtered_by_day)]
 
         # time filter
         if begin_time and end_time:
@@ -164,7 +157,7 @@ class Aggregator:
                 [stop["stop_lon"], stop["stop_lat"]],
             )
 
-        if str(stop["parent_station"]) != "nan":
+        if not pd.isnull(stop["parent_station"]):
             similar_stop_id = stop["parent_station"]
             similar_stop = stops_df[stops_df["stop_id"] == similar_stop_id]
             similar_stop_name = similar_stop[["stop_name"]].iloc[0]
@@ -413,40 +406,34 @@ class Aggregator:
             .lower()
         )
 
-        # filter services by day
-        calendar_df = self.gtfs["calendar"].copy()
-        calendar_df = calendar_df.astype({"start_date": int, "end_date": int})
-        calendar_df = calendar_df[calendar_df[day_of_week] == "1"]
-        calendar_df = calendar_df.query(
-            f"start_date <= {int(yyyymmdd)} and {int(yyyymmdd)} <= end_date",
-            engine="python",
-        )
+        # filter services by calendar
+        calendar_df = self.gtfs.get("calendar")
+        if calendar_df is None:
+            # generate an empty series if calendar.txt is missing because it is not required.
+            service_ids_on = pd.Series(name="service_id", dtype=str)
+        else:
+            calendar_df = calendar_df.astype({"start_date": int, "end_date": int})
+            calendar_df = calendar_df[calendar_df[day_of_week] == "1"]
+            calendar_df = calendar_df.query(
+                f"start_date <= {int(yyyymmdd)} and {int(yyyymmdd)} <= end_date",
+                engine="python",
+            )
+            service_ids_on = calendar_df["service_id"]
 
-        services_on_a_day = calendar_df[["service_id"]]
-
+        # filter services by dates
         calendar_dates_df = self.gtfs.get("calendar_dates")
         if calendar_dates_df is not None:
             filtered = calendar_dates_df[calendar_dates_df["date"] == yyyymmdd][
                 ["service_id", "exception_type"]
             ]
-            to_be_removed_services = filtered[filtered["exception_type"] == "2"]
-            to_be_appended_services = filtered[filtered["exception_type"] == "1"][
-                ["service_id"]
-            ]
+            to_be_removed_service_ids = filtered[filtered["exception_type"] == "2"]["service_id"]
+            to_be_appended_services_ids = filtered[filtered["exception_type"] == "1"]["service_id"]
 
-            services_on_a_day = pd.merge(
-                services_on_a_day, to_be_removed_services, on="service_id", how="left"
-            )
-            services_on_a_day = services_on_a_day[
-                services_on_a_day["exception_type"] != "2"
-            ]
-            services_on_a_day = pd.concat([services_on_a_day, to_be_appended_services])
-
-        services_on_a_day["service_flag"] = 1
+            service_ids_on = service_ids_on[~service_ids_on.isin(to_be_removed_service_ids)]
+            service_ids_on = pd.concat([service_ids_on, to_be_appended_services_ids])
 
         # filter trips
-        trips_df = self.gtfs["trips"].copy()
-        trip_service = pd.merge(trips_df, services_on_a_day, on="service_id")
-        trip_service = trip_service[trip_service["service_flag"] == 1]
+        trips_df = self.gtfs["trips"]
+        trips_in_services = trips_df[trips_df['service_id'].isin(service_ids_on)]
 
-        return trip_service[["trip_id", "service_flag"]]
+        return trips_in_services["trip_id"]

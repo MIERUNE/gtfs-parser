@@ -1,9 +1,6 @@
 import json
 import os
-import zipfile
-import tempfile
 import argparse
-import shutil
 
 from .gtfs import GTFS
 from .parse import read_routes, read_stops
@@ -55,19 +52,7 @@ def main():
     args = load_args()
     validate_args(args)
 
-    if args.src.endswith(".zip"):  # TODO: wiser checking
-        print("extracting zipfile...")
-        temp_dir = os.path.join(tempfile.gettempdir(), "gtfs_parser")
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-        os.mkdir(temp_dir)
-        with zipfile.ZipFile(args.src) as z:
-            z.extractall(temp_dir)
-        output_dir = temp_dir
-    else:
-        output_dir = args.src
-
-    gtfs = GTFS(output_dir)
+    gtfs = GTFS(args.src)
     print("GTFS loaded.")
 
     os.makedirs(args.dst, exist_ok=True)
