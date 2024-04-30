@@ -1,16 +1,31 @@
 import glob
 import os
 import zipfile
-import pandas as pd
 import io
 from dataclasses import dataclass
 from typing import Optional
 
+import pandas as pd
+import geopandas as gpd
 
-def append_table(f: io.BufferedIOBase, table_path: str, table_dfs: dict):
-    datatype = os.path.splitext(os.path.basename(table_path))[0]
+
+def load_df(f: io.BufferedIOBase, table_name: str) -> pd.DataFrame | gpd.GeoDataFrame:
     df = pd.read_csv(f, dtype=str, keep_default_na=False, na_values={""})
-    table_dfs[datatype] = df
+    if table_name == "shapes":
+        df["geometry"] = gpd.points_from_xy(df["shape_pt_lon"], df["shape_pt_lat"])
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+    elif table_name == "stops":
+        df["stop_lon"] = df["stop_lon"].astype(float)
+        df["stop_lat"] = df["stop_lat"].astype(float)
+        df["geometry"] = gpd.points_from_xy(df["stop_lon"], df["stop_lat"])
+        df = gpd.GeoDataFrame(df, geometry="geometry")
+    elif table_name == "stops":
+        if "parent_station" not in df:
+            df["parent_station"] = None
+    elif table_name == "stop_times":
+        df["stop_sequence"] = df["stop_sequence"].astype(int)
+
+    return df
 
 
 @dataclass
@@ -23,7 +38,7 @@ class GTFS:
     agency: pd.DataFrame
     routes: pd.DataFrame
     stop_times: pd.DataFrame
-    stops: pd.DataFrame
+    stops: gpd.GeoDataFrame
     trips: pd.DataFrame
     calendar: Optional[pd.DataFrame] = None
     calendar_dates: Optional[pd.DataFrame] = None
@@ -31,7 +46,7 @@ class GTFS:
     fare_rules: Optional[pd.DataFrame] = None
     feed_info: Optional[pd.DataFrame] = None
     frequencies: Optional[pd.DataFrame] = None
-    shapes: Optional[pd.DataFrame] = None
+    shapes: Optional[gpd.GeoDataFrame] = None
     transfers: Optional[pd.DataFrame] = None
     translations: Optional[pd.DataFrame] = None
 
@@ -48,15 +63,16 @@ def GTFSFactory(gtfs_path: str) -> GTFS:
     Args:
         path of zip file or directory containing txt files.
     Returns:
-        dict: tables
+        GTFS: dataclass of GTFS tables.
     """
     tables = {}
     path = os.path.join(gtfs_path)
     if os.path.isdir(path):
         table_files = glob.glob(os.path.join(gtfs_path, "*.txt"))
         for table_file in table_files:
+            table_name = os.path.splitext(os.path.basename(table_file))[0]
             with open(table_file, encoding="utf-8_sig") as f:
-                append_table(f, table_file, tables)
+                tables[table_name] = load_df(f, table_name)
     else:
         if not os.path.isfile(path):
             raise FileNotFoundError(f"zip file not found. ({path})")
@@ -66,36 +82,18 @@ def GTFSFactory(gtfs_path: str) -> GTFS:
                     file_name.endswith(".txt")
                     and os.path.basename(file_name) == file_name
                 ):
+                    table_name = os.path.splitext(os.path.basename(file_name))[0]
                     with z.open(file_name) as f:
-                        append_table(f, file_name, tables)
-
-    # cast some columns
-    cast_columns = {
-        "stops": {"stop_lon": float, "stop_lat": float},
-        "stop_times": {"stop_sequence": int},
-        "shapes": {
-            "shape_pt_lon": float,
-            "shape_pt_lat": float,
-            "shape_pt_sequence": int,
-        },
-    }
-    for table, casts in cast_columns.items():
-        if table in tables:
-            tables[table] = tables[table].astype(casts)
-
-    # Set null values on optional columns used in this module.
-    if "parent_station" not in tables["stops"].columns:
-        tables["stops"]["parent_station"] = None
+                        tables[table_name] = load_df(f, table_name)
 
     # set agency_id when there is a single agency
-    agency_df = tables["agency"]
-    if len(agency_df) == 1:
-        if "agency_id" not in agency_df.columns or pd.isnull(
-            agency_df["agency_id"].iloc[0]
+    if len(tables["agency"]) == 1:
+        if "agency_id" not in tables["agency"].columns or pd.isnull(
+            tables["agency"]["agency_id"].iloc[0]
         ):
-            agency_df["agency_id"] = ""
-        agency_id = agency_df["agency_id"].iloc[0]
-        tables["routes"]["agency_id"] = agency_id
+            tables["agency"]["agency_id"] = ""
+        # set agency_id to routes
+        tables["routes"]["agency_id"] = tables["agency"]["agency_id"].iloc[0]
 
     # if there are missing tables, exception is raised.
     gtfs = GTFS(
