@@ -1,16 +1,4 @@
-import os
-
-import pytest
-
-from gtfs_parser.gtfs import GTFS
 from gtfs_parser.parse import read_routes, read_stops
-
-FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixture")
-
-
-@pytest.fixture
-def gtfs():
-    return GTFS(FIXTURE_DIR)
 
 
 def test_read_stops(gtfs):
