@@ -3,6 +3,8 @@ import datetime
 
 import pandas as pd
 
+from gtfs_parser.gtfs import GTFS
+
 
 def latlon_to_str(latlon):
     return "".join(list(map(lambda coord: str(round(coord, 4)), latlon)))
@@ -11,7 +13,7 @@ def latlon_to_str(latlon):
 class Aggregator:
     def __init__(
         self,
-        gtfs: dict,
+        gtfs: GTFS,
         no_unify_stops=False,
         delimiter="",
         max_distance_degree=0.01,
@@ -46,30 +48,31 @@ class Aggregator:
         # filter stop_times by whether serviced or not
         if yyyymmdd:
             trip_ids_filtered_by_day = self.__get_trips_on_a_date(yyyymmdd)
-            stop_times_df = self.gtfs["stop_times"]
-            self.gtfs["stop_times"] = stop_times_df[stop_times_df["trip_id"].isin(trip_ids_filtered_by_day)]
+            self.gtfs.stop_times = self.gtfs.stop_times[
+                self.gtfs.stop_times["trip_id"].isin(trip_ids_filtered_by_day)
+            ]
 
         # time filter
         if begin_time and end_time:
             # departure_time is nullable and expressed in "hh:mm:ss" or "h:mm:ss" format.
             # Hour can be mor than 24.
             # Therefore, drop null records and convert times to integers.
-            int_dep_times = (
-                self.gtfs["stop_times"].departure_time.str.replace(":", "").astype(int)
-            )
-            self.gtfs["stop_times"] = self.gtfs["stop_times"][
-                self.gtfs["stop_times"].departure_time != ""
+            int_dep_times = self.gtfs.stop_times.departure_time.str.replace(
+                ":", ""
+            ).astype(int)
+            self.gtfs.stop_times = self.gtfs.stop_times[
+                self.gtfs.stop_times.departure_time != ""
             ][(int_dep_times >= int(begin_time)) & (int_dep_times < int(end_time))]
 
         if no_unify_stops:
             # no unifying stops
-            self.gtfs["stops"]["similar_stop_id"] = self.gtfs["stops"]["stop_id"]
-            self.gtfs["stops"]["similar_stop_name"] = self.gtfs["stops"]["stop_name"]
-            self.gtfs["stops"]["similar_stops_centroid"] = self.gtfs["stops"][
+            self.gtfs.stops["similar_stop_id"] = self.gtfs.stops["stop_id"]
+            self.gtfs.stops["similar_stop_name"] = self.gtfs.stops["stop_name"]
+            self.gtfs.stops["similar_stops_centroid"] = self.gtfs.stops[
                 ["stop_lon", "stop_lat"]
             ].values.tolist()
-            self.gtfs["stops"]["position_count"] = 1
-            self.similar_stops_df = self.gtfs["stops"][
+            self.gtfs.stops["position_count"] = 1
+            self.similar_stops_df = self.gtfs.stops[
                 [
                     "similar_stop_id",
                     "similar_stop_name",
@@ -78,15 +81,15 @@ class Aggregator:
                 ]
             ].copy()
         else:
-            parent_ids = self.gtfs["stops"]["parent_station"].unique()
-            self.gtfs["stops"]["is_parent"] = self.gtfs["stops"]["stop_id"].map(
+            parent_ids = self.gtfs.stops["parent_station"].unique()
+            self.gtfs.stops["is_parent"] = self.gtfs.stops["stop_id"].map(
                 lambda stop_id: 1 if stop_id in parent_ids else 0
             )
 
-            self.gtfs["stops"][
+            self.gtfs.stops[
                 ["similar_stop_id", "similar_stop_name", "similar_stops_centroid"]
             ] = (
-                self.gtfs["stops"]["stop_id"]
+                self.gtfs.stops["stop_id"]
                 .map(
                     lambda stop_id: self.__get_similar_stop_tuple(
                         stop_id, delimiter, max_distance_degree
@@ -94,22 +97,20 @@ class Aggregator:
                 )
                 .apply(pd.Series)
             )
-            self.gtfs["stops"]["position_id"] = self.gtfs["stops"][
+            self.gtfs.stops["position_id"] = self.gtfs.stops[
                 "similar_stops_centroid"
             ].map(latlon_to_str)
-            self.gtfs["stops"]["unique_id"] = (
-                self.gtfs["stops"]["similar_stop_id"]
-                + self.gtfs["stops"]["position_id"]
+            self.gtfs.stops["unique_id"] = (
+                self.gtfs.stops["similar_stop_id"] + self.gtfs.stops["position_id"]
             )
 
             # sometimes stop_name accidently becomes pd.Series instead of str.
-            self.gtfs["stops"]["similar_stop_name"] = self.gtfs["stops"][
+            self.gtfs.stops["similar_stop_name"] = self.gtfs.stops[
                 "similar_stop_name"
             ].map(lambda val: val if type(val) == str else val.stop_name)
-
+            print(self.gtfs.stops)
             position_count = (
-                self.gtfs["stop_times"]
-                .merge(self.gtfs["stops"], on="stop_id", how="left")
+                self.gtfs.stop_times.merge(self.gtfs.stops, on="stop_id", how="left")
                 .groupby("position_id")
                 .size()
                 .to_frame()
@@ -118,7 +119,7 @@ class Aggregator:
             position_count.columns = ["position_id", "position_count"]
 
             self.similar_stops_df = pd.merge(
-                self.gtfs["stops"].drop_duplicates(subset="position_id")[
+                self.gtfs.stops.drop_duplicates(subset="position_id")[
                     [
                         "position_id",
                         "similar_stop_id",
@@ -147,7 +148,7 @@ class Aggregator:
         Returns:
             str, str, [float, float]: similar_stop_id, similar_stop_name, similar_stops_centroid
         """
-        stops_df = self.gtfs["stops"].sort_values("stop_id")
+        stops_df = self.gtfs.stops.sort_values("stop_id")
         stop = stops_df[stops_df["stop_id"] == stop_id].iloc[0]
 
         if stop["is_parent"] == 1:
@@ -208,7 +209,7 @@ class Aggregator:
 
     @lru_cache(maxsize=None)
     def __get_stops_id_delimited(self, delimiter: str):
-        stops_df = self.gtfs.get("stops")[
+        stops_df = self.gtfs.stops[
             ["stop_id", "stop_name", "stop_lon", "stop_lat", "parent_station"]
         ].copy()
         stops_df["stop_id_prefix"] = stops_df["stop_id"].map(
@@ -284,7 +285,7 @@ class Aggregator:
             [type]: [description]
         """
         stop_times_df = (
-            self.gtfs.get("stop_times")[
+            self.gtfs.stop_times[
                 ["stop_id", "trip_id", "stop_sequence", "departure_time"]
             ]
             .sort_values(["trip_id", "stop_sequence"])
@@ -294,19 +295,19 @@ class Aggregator:
         # join agency info)
         stop_times_df = pd.merge(
             stop_times_df,
-            self.gtfs["trips"][["trip_id", "route_id"]],
+            self.gtfs.trips[["trip_id", "route_id"]],
             on="trip_id",
             how="left",
         )
         stop_times_df = pd.merge(
             stop_times_df,
-            self.gtfs["routes"][["route_id", "agency_id"]],
+            self.gtfs.routes[["route_id", "agency_id"]],
             on="route_id",
             how="left",
         )
         stop_times_df = pd.merge(
             stop_times_df,
-            self.gtfs["agency"][["agency_id", "agency_name"]],
+            self.gtfs.agency[["agency_id", "agency_name"]],
             on="agency_id",
             how="left",
         )
@@ -314,7 +315,7 @@ class Aggregator:
         # get prev and next stops_id, stop_name, trip_id
         stop_times_df = pd.merge(
             stop_times_df,
-            self.gtfs["stops"][
+            self.gtfs.stops[
                 [
                     "stop_id",
                     "similar_stop_id",
@@ -407,33 +408,42 @@ class Aggregator:
         )
 
         # filter services by calendar
-        calendar_df = self.gtfs.get("calendar")
-        if calendar_df is None:
+        if self.gtfs.calendar is None:
             # generate an empty series if calendar.txt is missing because it is not required.
             service_ids_on = pd.Series(name="service_id", dtype=str)
         else:
-            calendar_df = calendar_df.astype({"start_date": int, "end_date": int})
-            calendar_df = calendar_df[calendar_df[day_of_week] == "1"]
-            calendar_df = calendar_df.query(
+            self.gtfs.calendar = self.gtfs.calendar.astype(
+                {"start_date": int, "end_date": int}
+            )
+            self.gtfs.calendar = self.gtfs.calendar[
+                self.gtfs.calendar[day_of_week] == "1"
+            ]
+            self.gtfs.calendar = self.gtfs.calendar.query(
                 f"start_date <= {int(yyyymmdd)} and {int(yyyymmdd)} <= end_date",
                 engine="python",
             )
-            service_ids_on = calendar_df["service_id"]
+            service_ids_on = self.gtfs.calendar["service_id"]
 
         # filter services by dates
-        calendar_dates_df = self.gtfs.get("calendar_dates")
-        if calendar_dates_df is not None:
-            filtered = calendar_dates_df[calendar_dates_df["date"] == yyyymmdd][
-                ["service_id", "exception_type"]
+        if self.gtfs.calendar_dates is not None:
+            filtered = self.gtfs.calendar_dates[
+                self.gtfs.calendar_dates["date"] == yyyymmdd
+            ][["service_id", "exception_type"]]
+            to_be_removed_service_ids = filtered[filtered["exception_type"] == "2"][
+                "service_id"
             ]
-            to_be_removed_service_ids = filtered[filtered["exception_type"] == "2"]["service_id"]
-            to_be_appended_services_ids = filtered[filtered["exception_type"] == "1"]["service_id"]
+            to_be_appended_services_ids = filtered[filtered["exception_type"] == "1"][
+                "service_id"
+            ]
 
-            service_ids_on = service_ids_on[~service_ids_on.isin(to_be_removed_service_ids)]
+            service_ids_on = service_ids_on[
+                ~service_ids_on.isin(to_be_removed_service_ids)
+            ]
             service_ids_on = pd.concat([service_ids_on, to_be_appended_services_ids])
 
         # filter trips
-        trips_df = self.gtfs["trips"]
-        trips_in_services = trips_df[trips_df['service_id'].isin(service_ids_on)]
+        trips_in_services = self.gtfs.trips[
+            self.gtfs.trips["service_id"].isin(service_ids_on)
+        ]
 
         return trips_in_services["trip_id"]

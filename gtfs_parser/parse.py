@@ -1,6 +1,9 @@
 import pandas as pd
 
-def read_stops(gtfs:dict, ignore_no_route=False) -> list:
+from gtfs_parser.gtfs import GTFS
+
+
+def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
     """
     read stops by stops table
 
@@ -13,8 +16,8 @@ def read_stops(gtfs:dict, ignore_no_route=False) -> list:
 
     # get unique list of route_id related to each stop
     stop_times_trip_df = pd.merge(
-        gtfs["stop_times"],
-        gtfs["trips"],
+        gtfs.stop_times,
+        gtfs.trips,
         on="trip_id",
     )
     route_ids_on_stops = stop_times_trip_df.groupby("stop_id")["route_id"].unique()
@@ -22,7 +25,7 @@ def read_stops(gtfs:dict, ignore_no_route=False) -> list:
 
     # parse stops to GeoJSON-Features
     features = []
-    for stop in gtfs["stops"][
+    for stop in gtfs.stops[
         ["stop_id", "stop_lat", "stop_lon", "stop_name"]
     ].itertuples():
         # get all route_id related to the stop
@@ -51,7 +54,7 @@ def read_stops(gtfs:dict, ignore_no_route=False) -> list:
     return features
 
 
-def read_routes(gtfs:dict, ignore_shapes=False) -> list:
+def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
     """
     read routes by shapes or stop_times
     First, this method try to load shapes and parse it into routes,
@@ -66,20 +69,18 @@ def read_routes(gtfs:dict, ignore_shapes=False) -> list:
     """
     features = []
 
-    if gtfs.get("shapes") is None or ignore_shapes:
+    if gtfs.shapes is None or ignore_shapes:
         # trip-route-merge:A
         trips_routes = pd.merge(
-            gtfs["trips"][["trip_id", "route_id"]],
-            gtfs["routes"][
-                ["route_id", "route_long_name", "route_short_name"]
-            ],
+            gtfs.trips[["trip_id", "route_id"]],
+            gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
             on="route_id",
         )
 
         # stop_times-stops-merge:B
         stop_times_stop = pd.merge(
-            gtfs["stop_times"][["stop_id", "trip_id", "stop_sequence"]],
-            gtfs.get("stops")[["stop_id", "stop_lon", "stop_lat"]],
+            gtfs.stop_times[["stop_id", "trip_id", "stop_sequence"]],
+            gtfs.stops[["stop_id", "stop_lon", "stop_lat"]],
             on="stop_id",
         )
 
@@ -99,9 +100,7 @@ def read_routes(gtfs:dict, ignore_shapes=False) -> list:
                     "type": "Feature",
                     "geometry": {
                         "type": "LineString",
-                        "coordinates": route[
-                            ["stop_lon", "stop_lat"]
-                        ].values.tolist(),
+                        "coordinates": route[["stop_lon", "stop_lat"]].values.tolist(),
                     },
                     "properties": {
                         "route_id": str(route_id),
@@ -111,21 +110,23 @@ def read_routes(gtfs:dict, ignore_shapes=False) -> list:
             )
     else:
         # get_shapeids_on route
-        trips_with_shape_df = gtfs["trips"][["route_id", "shape_id"]].dropna(
+        trips_with_shape_df = gtfs.trips[["route_id", "shape_id"]].dropna(
             subset=["shape_id"]
         )
-        shape_ids_on_routes = trips_with_shape_df.groupby("route_id")["shape_id"].unique()
+        shape_ids_on_routes = trips_with_shape_df.groupby("route_id")[
+            "shape_id"
+        ].unique()
         shape_ids_on_routes.apply(lambda x: x.sort())
 
-        #get shape coordinate
-        shapes_df = gtfs["shapes"].copy()
+        # get shape coordinate
+        shapes_df = gtfs.shapes.copy()
         shapes_df.sort_values("shape_pt_sequence")
         shapes_df["pt"] = shapes_df[["shape_pt_lon", "shape_pt_lat"]].values.tolist()
         shape_coords = shapes_df.groupby("shape_id")["pt"].apply(tuple)
 
         # list-up already loaded shape_ids
         loaded_shape_ids = set()
-        for route in gtfs.get("routes").itertuples():
+        for route in gtfs.routes.itertuples():
             if shape_ids_on_routes.get(route.route_id) is None:
                 continue
 
@@ -135,13 +136,15 @@ def read_routes(gtfs:dict, ignore_shapes=False) -> list:
                 coordinates.append(shape_coords.at[shape_id])
                 loaded_shape_ids.add(shape_id)  # update loaded shape_ids
 
-            #get_route_name_from_tupple
+            # get_route_name_from_tupple
             if not pd.isna(route.route_short_name):
                 route_name = route.route_short_name
             elif not pd.isna(route.route_long_name):
                 route_name = route.route_long_name
             else:
-                ValueError(f'{route} have neither "route_long_name" or "route_short_time".')
+                ValueError(
+                    f'{route} have neither "route_long_name" or "route_short_time".'
+                )
 
             features.append(
                 {
