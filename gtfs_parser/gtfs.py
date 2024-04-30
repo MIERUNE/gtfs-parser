@@ -33,14 +33,12 @@ class GTFS:
     frequencies: Optional[pd.DataFrame] = None
     shapes: Optional[pd.DataFrame] = None
     transfers: Optional[pd.DataFrame] = None
+    translations: Optional[pd.DataFrame] = None
 
     # JP
     routes_jp: Optional[pd.DataFrame] = None
     agency_jp: Optional[pd.DataFrame] = None
     office_jp: Optional[pd.DataFrame] = None
-
-    # other
-    translations: Optional[pd.DataFrame] = None
 
 
 def GTFSFactory(gtfs_path: str) -> GTFS:
