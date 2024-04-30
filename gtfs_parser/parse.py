@@ -13,7 +13,6 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
     Returns:
         list: [description]
     """
-
     # get unique list of route_id related to each stop
     stop_times_trip_df = pd.merge(
         gtfs.stop_times,
@@ -21,36 +20,21 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
         on="trip_id",
     )
     route_ids_on_stops = stop_times_trip_df.groupby("stop_id")["route_id"].unique()
-    route_ids_on_stops.apply(lambda x: x.sort())
+
+    # join route_id to stop
+    gtfs.stops = pd.merge(gtfs.stops, route_ids_on_stops, on="stop_id", how="left")
+    # rename column: route_id -> route_ids
+    gtfs.stops.rename(columns={"route_id": "route_ids"}, inplace=True)
+    # fill na with empty list
+    gtfs.stops["route_ids"] = gtfs.stops["route_ids"].fillna("").apply(list)
+
+    if ignore_no_route:  # remove stops unconnected to routes
+        gtfs.stops = gtfs.stops[gtfs.stops["route_ids"].apply(len) > 0]
 
     # parse stops to GeoJSON-Features
-    features = []
-    for stop in gtfs.stops[
-        ["stop_id", "stop_lat", "stop_lon", "stop_name"]
-    ].itertuples():
-        # get all route_id related to the stop
-        route_ids = []
-        if stop.stop_id in route_ids_on_stops:
-            route_ids = route_ids_on_stops.at[stop.stop_id].tolist()
-
-        if len(route_ids) == 0 and ignore_no_route:
-            # skip to output the stop
-            continue
-
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": (stop.stop_lon, stop.stop_lat),
-                },
-                "properties": {
-                    "stop_id": stop.stop_id,
-                    "stop_name": stop.stop_name,
-                    "route_ids": route_ids,
-                },
-            }
-        )
+    features = list(
+        gtfs.stops[["geometry", "stop_id", "stop_name", "route_ids"]].iterfeatures()
+    )
     return features
 
 
