@@ -3,13 +3,15 @@ import os
 import zipfile
 import io
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 import pandas as pd
 import geopandas as gpd
 
 
-def load_df(f: io.BufferedIOBase, table_name: str) -> pd.DataFrame | gpd.GeoDataFrame:
+def load_df(
+    f: io.BufferedIOBase, table_name: str
+) -> Union[pd.DataFrame, gpd.GeoDataFrame]:
     df = pd.read_csv(f, dtype=str, keep_default_na=False, na_values={""})
     if table_name == "shapes":
         df["shape_pt_lon"] = df["shape_pt_lon"].astype(float)
