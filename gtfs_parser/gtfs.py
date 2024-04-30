@@ -69,12 +69,6 @@ def GTFSFactory(gtfs_path: str) -> GTFS:
                     with z.open(file_name) as f:
                         append_table(f, file_name, tables)
 
-    # check files.
-    if len(tables) == 0:
-        raise FileNotFoundError(
-            "txt files must reside at the root level directly, not in a sub folder."
-        )
-
     # cast some columns
     cast_columns = {
         "stops": {"stop_lon": float, "stop_lat": float},
