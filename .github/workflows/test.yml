@@ -24,11 +24,8 @@ jobs:
             - name: Run pytest
               run: poetry run pytest -v --cov --cov-report xml --cov-report term
 
-            - name: Upload coverage
-              uses: codecov/codecov-action@v3
+            - name: Upload coverage reports to Codecov
+              uses: codecov/codecov-action@v4.0.1
               with:
                   token: ${{ secrets.CODECOV_TOKEN }}
-                  file: ./coverage.xml
-                  flags: unittests
-                  env_vars: OS,PYTHON
-                  fail_ci_if_error: true
+                  slug: MIERUNE/gtfs-parser
