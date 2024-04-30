@@ -12,6 +12,8 @@ import geopandas as gpd
 def load_df(f: io.BufferedIOBase, table_name: str) -> pd.DataFrame | gpd.GeoDataFrame:
     df = pd.read_csv(f, dtype=str, keep_default_na=False, na_values={""})
     if table_name == "shapes":
+        df["shape_pt_lon"] = df["shape_pt_lon"].astype(float)
+        df["shape_pt_lat"] = df["shape_pt_lat"].astype(float)
         df["geometry"] = gpd.points_from_xy(df["shape_pt_lon"], df["shape_pt_lat"])
         df = gpd.GeoDataFrame(df, geometry="geometry")
     elif table_name == "stops":
@@ -19,7 +21,6 @@ def load_df(f: io.BufferedIOBase, table_name: str) -> pd.DataFrame | gpd.GeoData
         df["stop_lat"] = df["stop_lat"].astype(float)
         df["geometry"] = gpd.points_from_xy(df["stop_lon"], df["stop_lat"])
         df = gpd.GeoDataFrame(df, geometry="geometry")
-    elif table_name == "stops":
         if "parent_station" not in df:
             df["parent_station"] = None
     elif table_name == "stop_times":
