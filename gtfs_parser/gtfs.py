@@ -89,11 +89,17 @@ def GTFSFactory(gtfs_path: str) -> GTFS:
                     with z.open(file_name) as f:
                         tables[table_name] = load_df(f, table_name)
 
+    if len(tables) == 0:
+        raise FileNotFoundError(
+            "txt files must be in the root level directory, not in a sub folder."
+        )
+
     # set agency_id when there is a single agency
     if len(tables["agency"]) == 1:
         if "agency_id" not in tables["agency"].columns or pd.isnull(
             tables["agency"]["agency_id"].iloc[0]
         ):
+            # fill agency_id with empty str when it is missing or null
             tables["agency"]["agency_id"] = ""
         # set agency_id to routes
         tables["routes"]["agency_id"] = tables["agency"]["agency_id"].iloc[0]
