@@ -2,7 +2,7 @@ import pandas as pd
 import geopandas as gpd
 import shapely
 
-from gtfs_parser.gtfs import GTFS
+from .gtfs import GTFS
 
 
 def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:

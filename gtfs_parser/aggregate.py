@@ -3,7 +3,7 @@ import datetime
 
 import pandas as pd
 
-from gtfs_parser.gtfs import GTFS
+from .gtfs import GTFS
 
 
 def latlon_to_str(latlon):

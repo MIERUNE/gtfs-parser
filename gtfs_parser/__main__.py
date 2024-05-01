@@ -2,9 +2,9 @@ import json
 import os
 import argparse
 
-from gtfs_parser.gtfs import GTFSFactory
-from gtfs_parser.parse import read_routes, read_stops
-from gtfs_parser.aggregate import Aggregator
+from .gtfs import GTFSFactory
+from .parse import read_routes, read_stops
+from .aggregate import Aggregator
 
 
 def load_args():
