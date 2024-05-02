@@ -24,18 +24,18 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
     route_ids_on_stops = stop_times_trip_df.groupby("stop_id")["route_id"].unique()
 
     # join route_id to stop
-    gtfs.stops = pd.merge(gtfs.stops, route_ids_on_stops, on="stop_id", how="left")
+    route_stop = pd.merge(gtfs.stops, route_ids_on_stops, on="stop_id", how="left")
     # rename column: route_id -> route_ids
-    gtfs.stops.rename(columns={"route_id": "route_ids"}, inplace=True)
+    route_stop.rename(columns={"route_id": "route_ids"}, inplace=True)
     # fill na with empty list
-    gtfs.stops["route_ids"] = gtfs.stops["route_ids"].fillna("").apply(list)
+    route_stop["route_ids"] = route_stop["route_ids"].fillna("").apply(list)
 
     if ignore_no_route:  # remove stops unconnected to routes
-        gtfs.stops = gtfs.stops[gtfs.stops["route_ids"].apply(len) > 0]
+        route_stop = route_stop[route_stop["route_ids"].apply(len) > 0]
 
     # parse stops to GeoJSON-Features
     features = list(
-        gtfs.stops[["geometry", "stop_id", "stop_name", "route_ids"]].iterfeatures()
+        route_stop[["geometry", "stop_id", "stop_name", "route_ids"]].iterfeatures()
     )
     return features
 
@@ -55,40 +55,44 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
     """
 
     if gtfs.shapes is None or ignore_shapes:
-        sorted_stop_times = gtfs.stop_times.sort_values(["trip_id", "stop_sequence"])
-
-        trip_stop_pattern = sorted_stop_times.groupby("trip_id")["stop_id"].apply(tuple)
-
-        route_trip_stop_pattern = pd.merge(
-            trip_stop_pattern, gtfs.trips[["trip_id", "route_id"]], on="trip_id"
-        )
-        route_stop_patterns = route_trip_stop_pattern[
-            ["route_id", "stop_id"]
-        ].drop_duplicates()
-
-        route_stop_patterns["stop_pattern"] = route_stop_patterns["stop_id"]
-        route_stop_ids = route_stop_patterns.explode("stop_id")
-        route_stop_geoms = pd.merge(
-            route_stop_ids, gtfs.stops[["stop_id", "geometry"]], on="stop_id"
-        )
-
-        # Point -> LineString: group by route_id and trip_id
-        line_df = route_stop_geoms.groupby(["route_id", "stop_pattern"])[
-            "geometry"
-        ].apply(lambda x: shapely.geometry.LineString(x))
-
-        # group by route_id into MultiLineString
-        multilines = line_df.groupby(["route_id"]).apply(
-            lambda x: shapely.geometry.MultiLineString(x.to_list())
-        )
-
-        # join route_id and route_name
-        multiline_df = pd.merge(
-            gpd.GeoSeries(multilines),
+        # trip-route-merge:A
+        trips_routes = pd.merge(
+            gtfs.trips[["trip_id", "route_id"]],
             gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
             on="route_id",
         )
 
+        # stop_times-stops-merge:B
+        stop_times_stop = pd.merge(
+            gtfs.stop_times[["stop_id", "trip_id", "stop_sequence"]],
+            gtfs.stops[["stop_id", "geometry"]],
+            on="stop_id",
+        )
+
+        # A-B-merge
+        merged = pd.merge(stop_times_stop, trips_routes, on="trip_id")
+        # sort by route_id, trip_id, stop_sequence
+        merged.sort_values(["route_id", "trip_id", "stop_sequence"], inplace=True)
+
+        # Point -> LineString: group by route_id and trip_id
+        lines = merged.groupby(["route_id", "trip_id"])["geometry"].apply(
+            lambda x: shapely.geometry.LineString(x)
+        )
+        lines = lines.drop_duplicates()
+        line_df = lines.reset_index()
+
+        # group by route_id into MultiLineString
+        multilines = line_df.groupby(["route_id"])["geometry"].apply(
+            lambda x: shapely.geometry.MultiLineString(x.to_list())
+        )
+        multiline_df = multilines.reset_index()
+
+        # join route_id and route_name
+        multiline_df = pd.merge(
+            gpd.GeoDataFrame(multiline_df[["route_id", "geometry"]]),
+            gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
+            on="route_id",
+        )
         multiline_df["route_name"] = multiline_df["route_long_name"].fillna(
             ""
         ) + multiline_df["route_short_name"].fillna("")
