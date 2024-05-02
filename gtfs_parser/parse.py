@@ -76,7 +76,7 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
 
         # Point -> LineString: group by route_id and trip_id
         lines = merged.groupby(["route_id", "trip_id"])["geometry"].apply(
-            lambda x: shapely.geometry.LineString(x)
+            lambda x: shapely.geometry.LineString(x.tolist())
         )
         lines = lines.drop_duplicates()
         line_df = lines.reset_index()
@@ -118,7 +118,7 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
         shapes_df = gtfs.shapes.copy()
         shapes_df.sort_values(["shape_id", "shape_pt_sequence"])
         lines = shapes_df.groupby("shape_id")["geometry"].apply(
-            lambda x: shapely.geometry.LineString(x)
+            lambda x: shapely.geometry.LineString(x.tolist())
         )
         line_df = lines.reset_index()
 
@@ -157,7 +157,7 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
         if len(unloaded_shapes) > 0:
             # group by shape_id into LineString
             unloaded_shapes = unloaded_shapes.groupby("shape_id")["geometry"].apply(
-                lambda x: shapely.geometry.LineString(x)
+                lambda x: shapely.geometry.LineString(x.tolist())
             )
             unloaded_shapes = unloaded_shapes.reset_index()
 
