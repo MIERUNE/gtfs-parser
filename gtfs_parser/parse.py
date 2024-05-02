@@ -103,7 +103,6 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
         )
         return features
     else:
-        features = []
         # get_shapeids_on route
         trips_with_shape_df = gtfs.trips[["route_id", "shape_id"]].dropna(
             subset=["shape_id"]
@@ -112,65 +111,70 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
             "shape_id"
         ].unique()
         shape_ids_on_routes.apply(lambda x: x.sort())
+        shape_ids_on_routes = shape_ids_on_routes.reset_index()
+        shape_ids_on_routes = shape_ids_on_routes.explode("shape_id")
 
         # get shape coordinate
         shapes_df = gtfs.shapes.copy()
-        shapes_df.sort_values("shape_pt_sequence")
-        shapes_df["pt"] = shapes_df[["shape_pt_lon", "shape_pt_lat"]].values.tolist()
-        shape_coords = shapes_df.groupby("shape_id")["pt"].apply(tuple)
+        shapes_df.sort_values(["shape_id", "shape_pt_sequence"])
+        lines = shapes_df.groupby("shape_id")["geometry"].apply(
+            lambda x: shapely.geometry.LineString(x)
+        )
+        line_df = lines.reset_index()
 
-        # list-up already loaded shape_ids
-        loaded_shape_ids = set()
-        for route in gtfs.routes.itertuples():
-            if shape_ids_on_routes.get(route.route_id) is None:
-                continue
+        # merge
+        multiline_df = pd.merge(shape_ids_on_routes, line_df, on="shape_id")
+        # group by route_id into MultiLineString
+        multiline_df = multiline_df.groupby(["route_id"])["geometry"].apply(
+            lambda x: shapely.geometry.MultiLineString(x.to_list())
+        )
+        multiline_df = multiline_df.reset_index()
 
-            # get coords by route_id
-            coordinates = []
-            for shape_id in shape_ids_on_routes[route.route_id]:
-                coordinates.append(shape_coords.at[shape_id])
-                loaded_shape_ids.add(shape_id)  # update loaded shape_ids
+        # join routes
+        multiline_df = pd.merge(
+            multiline_df,
+            gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
+            on="route_id",
+        )
 
-            # get_route_name_from_tupple
-            if not pd.isna(route.route_short_name):
-                route_name = route.route_short_name
-            elif not pd.isna(route.route_long_name):
-                route_name = route.route_long_name
-            else:
-                ValueError(
-                    f'{route} have neither "route_long_name" or "route_short_time".'
-                )
+        # join route_names
+        multiline_df["route_name"] = multiline_df["route_long_name"].fillna(
+            ""
+        ) + multiline_df["route_short_name"].fillna("")
 
-            features.append(
-                {
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "MultiLineString",
-                        "coordinates": coordinates,
-                    },
-                    "properties": {
-                        "route_id": str(route.route_id),
-                        "route_name": route_name,
-                    },
-                }
-            )
+        # to GeoJSON-Feature
+        features = list(
+            gpd.GeoDataFrame(
+                multiline_df[["geometry", "route_id", "route_name"]]
+            ).iterfeatures()
+        )
 
         # load shapes unloaded yet
-        for shape_id in list(
-            filter(lambda id: id not in loaded_shape_ids, shape_coords.index)
-        ):
-            features.append(
-                {
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "MultiLineString",
-                        "coordinates": [shape_coords.at[shape_id]],
-                    },
-                    "properties": {
-                        "route_id": None,
-                        "route_name": str(shape_id),
-                    },
-                }
-            )
+        unloaded_shapes = gtfs.shapes[
+            ~gtfs.shapes["shape_id"].isin(shape_ids_on_routes["shape_id"].unique())
+        ]
 
-    return features
+        if len(unloaded_shapes) > 0:
+            # group by shape_id into LineString
+            unloaded_shapes = unloaded_shapes.groupby("shape_id")["geometry"].apply(
+                lambda x: shapely.geometry.LineString(x)
+            )
+            unloaded_shapes = unloaded_shapes.reset_index()
+
+            # group by route_id into MultiLineString
+            unloaded_shapes = unloaded_shapes.groupby(["shape_id"])["geometry"].apply(
+                lambda x: shapely.geometry.MultiLineString(x.to_list())
+            )
+            unloaded_shapes = unloaded_shapes.reset_index()
+
+            # fill id, name with shape_id
+            unloaded_shapes["route_id"] = None
+            unloaded_shapes["route_name"] = unloaded_shapes["shape_id"]
+
+            # to GeoJSON-Feature
+            unloaded_features = list(
+                gpd.GeoDataFrame(unloaded_shapes.reset_index()).iterfeatures()
+            )
+            features.extend(unloaded_features)
+
+        return features
