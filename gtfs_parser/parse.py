@@ -1,6 +1,4 @@
 import pandas as pd
-import geopandas as gpd
-import shapely
 
 from .gtfs import GTFS
 
@@ -34,9 +32,22 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
         route_stop = route_stop[route_stop["route_ids"].apply(len) > 0]
 
     # parse stops to GeoJSON-Features
-    features = list(
-        route_stop[["geometry", "stop_id", "stop_name", "route_ids"]].iterfeatures()
-    )
+    features = [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [row["stop_lon"], row["stop_lat"]],
+            },
+            "properties": {
+                "stop_id": row["stop_id"],
+                "stop_name": row["stop_name"],
+                "route_ids": row["route_ids"],
+            },
+        }
+        for _, row in route_stop.iterrows()
+    ]
+
     return features
 
 
@@ -65,8 +76,12 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
         # stop_times-stops-merge:B
         stop_times_stop = pd.merge(
             gtfs.stop_times[["stop_id", "trip_id", "stop_sequence"]],
-            gtfs.stops[["stop_id", "geometry"]],
+            gtfs.stops[["stop_id", "stop_lon", "stop_lat"]],
             on="stop_id",
+        )
+
+        stop_times_stop["stop_pt"] = stop_times_stop.apply(
+            lambda x: (x["stop_lon"], x["stop_lat"]), axis=1
         )
 
         # A-B-merge
@@ -75,21 +90,21 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
         merged.sort_values(["route_id", "trip_id", "stop_sequence"], inplace=True)
 
         # Point -> LineString: group by route_id and trip_id
-        lines = merged.groupby(["route_id", "trip_id"])["geometry"].apply(
-            lambda x: shapely.geometry.LineString(x.tolist())
+        lines = merged.groupby(["route_id", "trip_id"])["stop_pt"].apply(
+            lambda x: x.tolist()
         )
         lines = lines.drop_duplicates()
         line_df = lines.reset_index()
+        # rename: stop_pt -> line
+        line_df.rename(columns={"stop_pt": "line"}, inplace=True)
 
         # group by route_id into MultiLineString
-        multilines = line_df.groupby(["route_id"])["geometry"].apply(
-            lambda x: shapely.geometry.MultiLineString(x.to_list())
-        )
+        multilines = line_df.groupby(["route_id"])["line"].apply(lambda x: x.to_list())
         multiline_df = multilines.reset_index()
 
         # join route_id and route_name
         multiline_df = pd.merge(
-            gpd.GeoDataFrame(multiline_df[["route_id", "geometry"]]),
+            multiline_df[["route_id", "line"]],
             gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
             on="route_id",
         )
@@ -98,9 +113,20 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
         ) + multiline_df["route_short_name"].fillna("")
 
         # to GeoJSON-Feature
-        features = list(
-            multiline_df[["geometry", "route_id", "route_name"]].iterfeatures()
-        )
+        features = [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "MultiLineString",
+                    "coordinates": row["line"],
+                },
+                "properties": {
+                    "route_id": row["route_id"],
+                    "route_name": row["route_name"],
+                },
+            }
+            for _, row in multiline_df.iterrows()
+        ]
         return features
     else:
         # get_shapeids_on route
@@ -116,17 +142,19 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
 
         # get shape coordinate
         shapes_df = gtfs.shapes.copy()
-        shapes_df.sort_values(["shape_id", "shape_pt_sequence"])
-        lines = shapes_df.groupby("shape_id")["geometry"].apply(
-            lambda x: shapely.geometry.LineString(x.tolist())
+        shapes_df["shape_pt"] = shapes_df.apply(
+            lambda x: (x["shape_pt_lon"], x["shape_pt_lat"]), axis=1
         )
+        shapes_df.sort_values(["shape_id", "shape_pt_sequence"])
+        lines = shapes_df.groupby("shape_id")["shape_pt"].apply(lambda x: x.tolist())
         line_df = lines.reset_index()
+        line_df.rename(columns={"shape_pt": "shape_line"}, inplace=True)
 
         # merge
         multiline_df = pd.merge(shape_ids_on_routes, line_df, on="shape_id")
         # group by route_id into MultiLineString
-        multiline_df = multiline_df.groupby(["route_id"])["geometry"].apply(
-            lambda x: shapely.geometry.MultiLineString(x.to_list())
+        multiline_df = multiline_df.groupby(["route_id"])["shape_line"].apply(
+            lambda x: x.to_list()
         )
         multiline_df = multiline_df.reset_index()
 
@@ -143,11 +171,20 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
         ) + multiline_df["route_short_name"].fillna("")
 
         # to GeoJSON-Feature
-        features = list(
-            gpd.GeoDataFrame(
-                multiline_df[["geometry", "route_id", "route_name"]]
-            ).iterfeatures()
-        )
+        features = [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "MultiLineString",
+                    "coordinates": row["shape_line"],
+                },
+                "properties": {
+                    "route_id": row["route_id"],
+                    "route_name": row["route_name"],
+                },
+            }
+            for _, row in multiline_df.iterrows()
+        ]
 
         # load shapes unloaded yet
         unloaded_shapes = gtfs.shapes[
@@ -155,15 +192,19 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
         ]
 
         if len(unloaded_shapes) > 0:
+            unloaded_shapes["shape_pt"] = unloaded_shapes.apply(
+                lambda x: (x["shape_pt_lon"], x["shape_pt_lat"]), axis=1
+            )
             # group by shape_id into LineString
-            unloaded_shapes = unloaded_shapes.groupby("shape_id")["geometry"].apply(
-                lambda x: shapely.geometry.LineString(x.tolist())
+            unloaded_shapes = unloaded_shapes.groupby("shape_id")["shape_pt"].apply(
+                lambda x: x.tolist()
             )
             unloaded_shapes = unloaded_shapes.reset_index()
+            unloaded_shapes.rename(columns={"shape_pt": "shape_line"}, inplace=True)
 
             # group by route_id into MultiLineString
-            unloaded_shapes = unloaded_shapes.groupby(["shape_id"])["geometry"].apply(
-                lambda x: shapely.geometry.MultiLineString(x.to_list())
+            unloaded_shapes = unloaded_shapes.groupby(["shape_id"])["shape_line"].apply(
+                lambda x: x.to_list()
             )
             unloaded_shapes = unloaded_shapes.reset_index()
 
@@ -172,9 +213,20 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
             unloaded_shapes["route_name"] = unloaded_shapes["shape_id"]
 
             # to GeoJSON-Feature
-            unloaded_features = list(
-                gpd.GeoDataFrame(unloaded_shapes.reset_index()).iterfeatures()
-            )
+            unloaded_features = [
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "MultiLineString",
+                        "coordinates": row["shape_line"],
+                    },
+                    "properties": {
+                        "route_id": row["route_id"],
+                        "route_name": row["route_name"],
+                    },
+                }
+                for _, row in unloaded_shapes.iterrows()
+            ]
             features.extend(unloaded_features)
 
         return features

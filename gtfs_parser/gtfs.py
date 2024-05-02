@@ -3,27 +3,20 @@ import os
 import zipfile
 import io
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional
 
 import pandas as pd
-import geopandas as gpd
 
 
-def load_df(
-    f: io.BufferedIOBase, table_name: str
-) -> Union[pd.DataFrame, gpd.GeoDataFrame]:
+def load_df(f: io.BufferedIOBase, table_name: str) -> pd.DataFrame:
     df = pd.read_csv(f, dtype=str, keep_default_na=False, na_values={""})
     if table_name == "shapes":
         df["shape_pt_lon"] = df["shape_pt_lon"].astype(float)
         df["shape_pt_lat"] = df["shape_pt_lat"].astype(float)
         df["shape_pt_sequence"] = df["shape_pt_sequence"].astype(int)
-        df["geometry"] = gpd.points_from_xy(df["shape_pt_lon"], df["shape_pt_lat"])
-        df = gpd.GeoDataFrame(df, geometry="geometry")
     elif table_name == "stops":
         df["stop_lon"] = df["stop_lon"].astype(float)
         df["stop_lat"] = df["stop_lat"].astype(float)
-        df["geometry"] = gpd.points_from_xy(df["stop_lon"], df["stop_lat"])
-        df = gpd.GeoDataFrame(df, geometry="geometry")
         if "parent_station" not in df:
             df["parent_station"] = None
     elif table_name == "stop_times":
@@ -42,7 +35,7 @@ class GTFS:
     agency: pd.DataFrame
     routes: pd.DataFrame
     stop_times: pd.DataFrame
-    stops: gpd.GeoDataFrame
+    stops: pd.DataFrame
     trips: pd.DataFrame
     calendar: Optional[pd.DataFrame] = None
     calendar_dates: Optional[pd.DataFrame] = None
@@ -50,7 +43,7 @@ class GTFS:
     fare_rules: Optional[pd.DataFrame] = None
     feed_info: Optional[pd.DataFrame] = None
     frequencies: Optional[pd.DataFrame] = None
-    shapes: Optional[gpd.GeoDataFrame] = None
+    shapes: Optional[pd.DataFrame] = None
     transfers: Optional[pd.DataFrame] = None
     translations: Optional[pd.DataFrame] = None
 
