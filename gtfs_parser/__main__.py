@@ -2,7 +2,7 @@ import json
 import os
 import argparse
 
-from .gtfs import GTFS
+from .gtfs import GTFSFactory
 from .parse import read_routes, read_stops
 from .aggregate import Aggregator
 
@@ -52,7 +52,7 @@ def main():
     args = load_args()
     validate_args(args)
 
-    gtfs = GTFS(args.src)
+    gtfs = GTFSFactory(args.src)
     print("GTFS loaded.")
 
     os.makedirs(args.dst, exist_ok=True)
