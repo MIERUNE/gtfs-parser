@@ -55,41 +55,40 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
     """
 
     if gtfs.shapes is None or ignore_shapes:
-        # trip-route-merge:A
-        trips_routes = pd.merge(
-            gtfs.trips[["trip_id", "route_id"]],
-            gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
-            on="route_id",
-        )
+        sorted_stop_times = gtfs.stop_times.sort_values(["trip_id", "stop_sequence"])
 
-        # stop_times-stops-merge:B
-        stop_times_stop = pd.merge(
-            gtfs.stop_times[["stop_id", "trip_id", "stop_sequence"]],
-            gtfs.stops[["stop_id", "geometry"]],
-            on="stop_id",
-        )
+        trip_stop_pattern = sorted_stop_times.groupby("trip_id")["stop_id"].apply(tuple)
 
-        # A-B-merge
-        merged = pd.merge(stop_times_stop, trips_routes, on="trip_id")
-        # sort by route_id, trip_id, stop_sequence
-        merged.sort_values(["route_id", "trip_id", "stop_sequence"], inplace=True)
+        route_trip_stop_pattern = pd.merge(
+            trip_stop_pattern, gtfs.trips[["trip_id", "route_id"]], on="trip_id"
+        )
+        route_stop_patterns = route_trip_stop_pattern[
+            ["route_id", "stop_id"]
+        ].drop_duplicates()
+
+        route_stop_patterns["stop_pattern"] = route_stop_patterns["stop_id"]
+        route_stop_ids = route_stop_patterns.explode("stop_id")
+        route_stop_geoms = pd.merge(
+            route_stop_ids, gtfs.stops[["stop_id", "geometry"]], on="stop_id"
+        )
 
         # Point -> LineString: group by route_id and trip_id
-        line_df = merged.groupby(["route_id", "trip_id"])["geometry"].apply(
-            lambda x: shapely.geometry.LineString(x)
-        )
-        line_df = line_df.reset_index()
+        line_df = route_stop_geoms.groupby(["route_id", "stop_pattern"])[
+            "geometry"
+        ].apply(lambda x: shapely.geometry.LineString(x))
 
         # group by route_id into MultiLineString
-        multiline_df = gpd.GeoDataFrame(line_df).dissolve(by="route_id")
-        multiline_df.reset_index(inplace=True)
+        multilines = line_df.groupby(["route_id"]).apply(
+            lambda x: shapely.geometry.MultiLineString(x.to_list())
+        )
 
         # join route_id and route_name
         multiline_df = pd.merge(
-            multiline_df[["route_id", "geometry"]],
+            gpd.GeoSeries(multilines),
             gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
             on="route_id",
         )
+
         multiline_df["route_name"] = multiline_df["route_long_name"].fillna(
             ""
         ) + multiline_df["route_short_name"].fillna("")

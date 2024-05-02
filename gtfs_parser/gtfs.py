@@ -16,6 +16,7 @@ def load_df(
     if table_name == "shapes":
         df["shape_pt_lon"] = df["shape_pt_lon"].astype(float)
         df["shape_pt_lat"] = df["shape_pt_lat"].astype(float)
+        df["shape_pt_sequence"] = df["shape_pt_sequence"].astype(int)
         df["geometry"] = gpd.points_from_xy(df["shape_pt_lon"], df["shape_pt_lat"])
         df = gpd.GeoDataFrame(df, geometry="geometry")
     elif table_name == "stops":
