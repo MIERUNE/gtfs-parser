@@ -134,7 +134,7 @@ class Aggregator:
         else:
             # unify by distance
             if len(delimited_id_pair) > 0:
-                undelimited_stops = solo_stops[solo_stops["stop_id"] != delimited_id_pair["stop_id"]]
+                undelimited_stops = solo_stops[~solo_stops["stop_id"].isin(delimited_id_pair["stop_id"])]
             else:
                 undelimited_stops = solo_stops
             near_id_pair = Aggregator.__calc_near_id_pair(undelimited_stops, max_distance_degree)
