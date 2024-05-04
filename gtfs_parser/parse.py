@@ -14,17 +14,15 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
         list: [description]
     """
     # get unique list of route_id related to each stop
-    stop_times_trip_df = pd.merge(
-        gtfs.stop_times,
-        gtfs.trips,
+    stop_times_trip_df = gtfs.stop_times.join(
+        gtfs.trips.set_index("trip_id"),
         on="trip_id",
     )
-    route_ids_on_stops = stop_times_trip_df.groupby("stop_id")["route_id"].unique()
+    stop_route_df = stop_times_trip_df[["stop_id", "route_id"]].drop_duplicates()
+    route_ids_on_stops = stop_route_df.groupby("stop_id")["route_id"].apply(list).rename("route_ids")
 
     # join route_id to stop
     route_stop = pd.merge(gtfs.stops, route_ids_on_stops, on="stop_id", how="left")
-    # rename column: route_id -> route_ids
-    route_stop.rename(columns={"route_id": "route_ids"}, inplace=True)
     # fill na with empty list
     route_stop["route_ids"] = route_stop["route_ids"].fillna("").apply(list)
 
@@ -32,6 +30,7 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
         route_stop = route_stop[route_stop["route_ids"].apply(len) > 0]
 
     # parse stops to GeoJSON-Features
+    stop_dics = route_stop.to_dict(orient="records")
     features = [
         {
             "type": "Feature",
@@ -45,7 +44,7 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
                 "route_ids": row["route_ids"],
             },
         }
-        for _, row in route_stop.iterrows()
+        for row in stop_dics
     ]
 
     return features
