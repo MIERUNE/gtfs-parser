@@ -243,13 +243,9 @@ class Aggregator:
         Returns:
             [type]: [description]
         """
-        # sort similar stop sequence
-        stop_times_df = (
-            self.stop_times[["trip_id", "stop_sequence", "stop_id"]]
-            .sort_values(["trip_id", "stop_sequence"])
-        )
+        #
         stop_times_df = pd.merge(
-            stop_times_df,
+            self.stop_times[["trip_id", "stop_sequence", "stop_id"]],
             self.stop_relations,
             on="stop_id"
         )
@@ -264,6 +260,8 @@ class Aggregator:
             trip_agency_df,
             on="trip_id"
         )
+        stop_times_df = stop_times_df.sort_values(["trip_id", "stop_sequence"])
+
         # generate path by joining next stop_times
         stop_times_df["next_stop_id"] = stop_times_df["similar_stop_id"].shift(-1)
         stop_times_df["next_trip_id"] = stop_times_df["trip_id"].shift(-1)
