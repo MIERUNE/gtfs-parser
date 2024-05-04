@@ -14,7 +14,7 @@ class Aggregator:
 
     Args:
         delimiter (str, optional): stop_id delimiter, sample_A, sample_B, then delimiter is '_'. Defaults to ''.
-        max_distance_degree (float, optional): distance limit in grouping by stop_name. Defaults to 0.003.
+        max_distance_degree (float, optional): distance limit in grouping by stop_name. Defaults to 0.003.(approx. 300m)
 
     Returns:
         [type]: [description]
@@ -64,6 +64,8 @@ class Aggregator:
 
     @staticmethod
     def __get_similar_stop_without_unifying(stops):
+        if "location_type" in stops:
+            stops = stops[stops["location_type"] == 0]
         similar_stops_centroid = stops[["stop_lon", "stop_lat"]].values.tolist()
 
         similar_stops = pd.DataFrame({
@@ -88,7 +90,7 @@ class Aggregator:
 
             solo_stops = stops[
                 ~stops["stop_id"].isin(child_id_pair["stop_id"])
-                & ~(stops["location_type"] == "1")
+                & (stops["location_type"] == 0)
             ]
         else:
             solo_stops = stops
@@ -101,7 +103,11 @@ class Aggregator:
 
     @staticmethod
     def __unify_child_stops(stops):
-        child_id_pair = stops[stops["parent_station"].isin(stops["stop_id"])][["stop_id", "parent_station"]]
+        child_id_pair = stops[
+            stops["parent_station"].isin(stops["stop_id"])
+            & (stops["location_type"] == 0)
+        ][["stop_id", "parent_station"]]
+
         child_id_pair.rename(columns={"parent_station": "similar_stop_id"}, inplace=True)
 
         similar_ids = child_id_pair["similar_stop_id"].unique()
@@ -179,15 +185,15 @@ class Aggregator:
         # The smallest stop id among the nearest stops is considered as the root id.
         near_id_pair = near_matrix.groupby("stop_id").min().reset_index()
 
-        near_id_pair = Aggregator.__cluster_near_id(near_id_pair)
+        near_id_pair = Aggregator.__join_near_group(near_id_pair)
         return near_id_pair.rename(columns={"stop_id_r": "similar_stop_id"})
 
     """
-    Cluster nearby stops.
+    Join near groups of stops.
     Trace root stops up to 5 times and modify root id.
     """
     @staticmethod
-    def __cluster_near_id(near_id_pair):
+    def __join_near_group(near_id_pair):
         for i in range(5):
             leaf_pair = near_id_pair.query("stop_id != stop_id_r")\
                 .rename(columns={"stop_id": "stop_id_r", "stop_id_r": "stop_id_r2"})
