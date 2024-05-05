@@ -14,20 +14,22 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
         list: [description]
     """
     # get unique list of route_id related to each stop
-    stop_times_trip_df = gtfs.stop_times.join(
-        gtfs.trips.set_index("trip_id"),
+    stop_trip_route_df = gtfs.stop_times[["trip_id", "stop_id"]].join(
+        gtfs.trips["route_id"].reindex(gtfs.trips["trip_id"]),
         on="trip_id",
     )
-    stop_route_df = stop_times_trip_df[["stop_id", "route_id"]].drop_duplicates()
+    stop_route_df = stop_trip_route_df[["stop_id", "route_id"]].drop_duplicates()
     route_ids_on_stops = stop_route_df.groupby("stop_id")["route_id"].apply(list).rename("route_ids")
 
-    # join route_id to stop
-    route_stop = pd.merge(gtfs.stops, route_ids_on_stops, on="stop_id", how="left")
-    # fill na with empty list
-    route_stop["route_ids"] = route_stop["route_ids"].fillna("").apply(list)
+    # outer join route_ids to stop
+    route_stop = gtfs.stops.join(route_ids_on_stops, on="stop_id", how="left")
 
-    if ignore_no_route:  # remove stops unconnected to routes
-        route_stop = route_stop[route_stop["route_ids"].apply(len) > 0]
+    if ignore_no_route:
+        # remove stops unconnected to routes
+        route_stop = route_stop[~route_stop["route_ids"].isna()]
+    else:
+        # fill na with empty list
+        route_stop["route_ids"] = route_stop["route_ids"].fillna("").apply(list)
 
     # parse stops to GeoJSON-Features
     stop_dics = route_stop.to_dict(orient="records")
