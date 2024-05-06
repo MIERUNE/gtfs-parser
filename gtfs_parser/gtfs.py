@@ -2,7 +2,7 @@ import glob
 import os
 import zipfile
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Optional
 
 import pandas as pd
@@ -28,10 +28,9 @@ def load_df(f: io.BufferedIOBase, table_name: str) -> pd.DataFrame:
 @dataclass
 class GTFS:
     """
-    reference: https://www.mlit.go.jp/common/001283244.pdf
+    reference: https://gtfs.org/schedule/reference/
+    reference for Japan: https://www.mlit.go.jp/common/001283244.pdf
     """
-
-    # standard
     agency: pd.DataFrame
     routes: pd.DataFrame
     stop_times: pd.DataFrame
@@ -39,18 +38,8 @@ class GTFS:
     trips: pd.DataFrame
     calendar: Optional[pd.DataFrame] = None
     calendar_dates: Optional[pd.DataFrame] = None
-    fare_attributes: Optional[pd.DataFrame] = None
-    fare_rules: Optional[pd.DataFrame] = None
     feed_info: Optional[pd.DataFrame] = None
-    frequencies: Optional[pd.DataFrame] = None
     shapes: Optional[pd.DataFrame] = None
-    transfers: Optional[pd.DataFrame] = None
-    translations: Optional[pd.DataFrame] = None
-
-    # JP
-    routes_jp: Optional[pd.DataFrame] = None
-    agency_jp: Optional[pd.DataFrame] = None
-    office_jp: Optional[pd.DataFrame] = None
 
 
 def GTFSFactory(gtfs_path: str) -> GTFS:
@@ -64,15 +53,16 @@ def GTFSFactory(gtfs_path: str) -> GTFS:
     """
     tables = {}
     path = os.path.join(gtfs_path)
+    used_tables = {field.name for field in fields(GTFS)}
     if os.path.isdir(path):
         table_files = glob.glob(os.path.join(gtfs_path, "*.txt"))
         for table_file in table_files:
             table_name = os.path.splitext(os.path.basename(table_file))[0]
-            with open(table_file, encoding="utf-8_sig") as f:
-                tables[table_name] = load_df(f, table_name)
-    else:
-        if not os.path.isfile(path):
-            raise FileNotFoundError(f"zip file not found. ({path})")
+            if table_name in used_tables:
+                with open(table_file, encoding="utf-8_sig") as f:
+                    tables[table_name] = load_df(f, table_name)
+
+    elif os.path.isfile(path):
         with zipfile.ZipFile(path) as z:
             for file_name in z.namelist():
                 if (
@@ -80,8 +70,11 @@ def GTFSFactory(gtfs_path: str) -> GTFS:
                     and os.path.basename(file_name) == file_name
                 ):
                     table_name = os.path.splitext(os.path.basename(file_name))[0]
-                    with z.open(file_name) as f:
-                        tables[table_name] = load_df(f, table_name)
+                    if table_name in used_tables:
+                        with z.open(file_name) as f:
+                            tables[table_name] = load_df(f, table_name)
+    else:
+        raise FileNotFoundError(f"zip file not found. ({path})")
 
     if len(tables) == 0:
         raise FileNotFoundError(
@@ -107,16 +100,8 @@ def GTFSFactory(gtfs_path: str) -> GTFS:
         stops=tables.get("stops"),
         trips=tables.get("trips"),
         calendar_dates=tables.get("calendar_dates"),
-        fare_attributes=tables.get("fare_attributes"),
-        fare_rules=tables.get("fare_rules"),
         feed_info=tables.get("feed_info"),
-        frequencies=tables.get("frequencies"),
         shapes=tables.get("shapes"),
-        transfers=tables.get("transfers"),
-        routes_jp=tables.get("routes_jp"),
-        agency_jp=tables.get("agency_jp"),
-        office_jp=tables.get("office_jp"),
-        translations=tables.get("translations"),
     )
 
     return gtfs
