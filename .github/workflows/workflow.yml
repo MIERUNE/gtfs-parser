@@ -1,31 +1,31 @@
 on:
-  release:
-    types:
-      - published
+    release:
+        types:
+            - published
 
 name: release
 
 jobs:
-  pypi:
-    name: upload release to PyPI
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/checkout@v3
+    pypi:
+        name: upload release to PyPI
+        runs-on: ubuntu-latest
+        permissions:
+            id-token: write
+        steps:
+            - uses: actions/checkout@v3
 
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.7"
+            - uses: actions/setup-python@v4
+              with:
+                  python-version: '3.9'
 
-      - name: deps
-        run: python -m pip install -U poetry
+            - name: deps
+              run: python -m pip install -U poetry
 
-      - name: build
-        run: poetry build
-        
-      - name: publish
-        # gh-action-pypi-publish uses TWINE_PASSWORD automatically
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_APITOKEN }}
+            - name: build
+              run: poetry build
+
+            - name: publish
+              # gh-action-pypi-publish uses TWINE_PASSWORD automatically
+              uses: pypa/gh-action-pypi-publish@release/v1
+              with:
+                  password: ${{ secrets.PYPI_APITOKEN }}
