@@ -19,6 +19,8 @@ def load_df(f: io.BufferedIOBase, table_name: str) -> pd.DataFrame:
         df["stop_lat"] = df["stop_lat"].astype(float)
         if "parent_station" not in df:
             df["parent_station"] = None
+        if "location_type" in df:
+            df["location_type"] = df["location_type"].fillna("0").astype(int)
     elif table_name == "stop_times":
         df["stop_sequence"] = df["stop_sequence"].astype(int)
 

@@ -14,24 +14,25 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
         list: [description]
     """
     # get unique list of route_id related to each stop
-    stop_times_trip_df = pd.merge(
-        gtfs.stop_times,
-        gtfs.trips,
+    stop_trip_route_df = gtfs.stop_times[["trip_id", "stop_id"]].join(
+        gtfs.trips["route_id"].reindex(gtfs.trips["trip_id"]),
         on="trip_id",
     )
-    route_ids_on_stops = stop_times_trip_df.groupby("stop_id")["route_id"].unique()
+    stop_route_df = stop_trip_route_df[["stop_id", "route_id"]].drop_duplicates()
+    route_ids_on_stops = stop_route_df.groupby("stop_id")["route_id"].apply(list).rename("route_ids")
 
-    # join route_id to stop
-    route_stop = pd.merge(gtfs.stops, route_ids_on_stops, on="stop_id", how="left")
-    # rename column: route_id -> route_ids
-    route_stop.rename(columns={"route_id": "route_ids"}, inplace=True)
-    # fill na with empty list
-    route_stop["route_ids"] = route_stop["route_ids"].fillna("").apply(list)
+    # outer join route_ids to stop
+    route_stop = gtfs.stops.join(route_ids_on_stops, on="stop_id", how="left")
 
-    if ignore_no_route:  # remove stops unconnected to routes
-        route_stop = route_stop[route_stop["route_ids"].apply(len) > 0]
+    if ignore_no_route:
+        # remove stops unconnected to routes
+        route_stop = route_stop[~route_stop["route_ids"].isna()]
+    else:
+        # fill na with empty list
+        route_stop["route_ids"] = route_stop["route_ids"].fillna("").apply(list)
 
     # parse stops to GeoJSON-Features
+    stop_dics = route_stop.to_dict(orient="records")
     features = [
         {
             "type": "Feature",
@@ -45,7 +46,7 @@ def read_stops(gtfs: GTFS, ignore_no_route=False) -> list:
                 "route_ids": row["route_ids"],
             },
         }
-        for _, row in route_stop.iterrows()
+        for row in stop_dics
     ]
 
     return features
@@ -66,167 +67,117 @@ def read_routes(gtfs: GTFS, ignore_shapes=False) -> list:
     """
 
     if gtfs.shapes is None or ignore_shapes:
-        # trip-route-merge:A
-        trips_routes = pd.merge(
-            gtfs.trips[["trip_id", "route_id"]],
-            gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
-            on="route_id",
-        )
-
-        # stop_times-stops-merge:B
-        stop_times_stop = pd.merge(
-            gtfs.stop_times[["stop_id", "trip_id", "stop_sequence"]],
-            gtfs.stops[["stop_id", "stop_lon", "stop_lat"]],
-            on="stop_id",
-        )
-
-        stop_times_stop["stop_pt"] = stop_times_stop.apply(
-            lambda x: (x["stop_lon"], x["stop_lat"]), axis=1
-        )
-
-        # A-B-merge
-        merged = pd.merge(stop_times_stop, trips_routes, on="trip_id")
-        # sort by route_id, trip_id, stop_sequence
-        merged.sort_values(["route_id", "trip_id", "stop_sequence"], inplace=True)
-
-        # Point -> LineString: group by route_id and trip_id
-        lines = merged.groupby(["route_id", "trip_id"])["stop_pt"].apply(
-            lambda x: x.tolist()
-        )
-        lines = lines.drop_duplicates()
-        line_df = lines.reset_index()
-        # rename: stop_pt -> line
-        line_df.rename(columns={"stop_pt": "line"}, inplace=True)
-
-        # group by route_id into MultiLineString
-        multilines = line_df.groupby(["route_id"])["line"].apply(lambda x: x.to_list())
-        multiline_df = multilines.reset_index()
-
-        # join route_id and route_name
-        multiline_df = pd.merge(
-            multiline_df[["route_id", "line"]],
-            gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
-            on="route_id",
-        )
-        multiline_df["route_name"] = multiline_df["route_long_name"].fillna(
-            ""
-        ) + multiline_df["route_short_name"].fillna("")
-
-        # to GeoJSON-Feature
-        features = [
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "MultiLineString",
-                    "coordinates": row["line"],
-                },
-                "properties": {
-                    "route_id": row["route_id"],
-                    "route_name": row["route_name"],
-                },
-            }
-            for _, row in multiline_df.iterrows()
-        ]
-        return features
+        return __read_routes_ignore_shapes(gtfs)
     else:
-        # get_shapeids_on route
-        trips_with_shape_df = gtfs.trips[["route_id", "shape_id"]].dropna(
-            subset=["shape_id"]
-        )
-        shape_ids_on_routes = trips_with_shape_df.groupby("route_id")[
-            "shape_id"
-        ].unique()
-        shape_ids_on_routes.apply(lambda x: x.sort())
-        shape_ids_on_routes = shape_ids_on_routes.reset_index()
-        shape_ids_on_routes = shape_ids_on_routes.explode("shape_id")
+        return __read_route_shapes(gtfs)
 
-        # get shape coordinate
-        shapes_df = gtfs.shapes.copy()
-        shapes_df["shape_pt"] = shapes_df.apply(
-            lambda x: (x["shape_pt_lon"], x["shape_pt_lat"]), axis=1
-        )
-        shapes_df.sort_values(["shape_id", "shape_pt_sequence"])
-        lines = shapes_df.groupby("shape_id")["shape_pt"].apply(lambda x: x.tolist())
-        line_df = lines.reset_index()
-        line_df.rename(columns={"shape_pt": "shape_line"}, inplace=True)
 
-        # merge
-        multiline_df = pd.merge(shape_ids_on_routes, line_df, on="shape_id")
-        # group by route_id into MultiLineString
-        multiline_df = multiline_df.groupby(["route_id"])["shape_line"].apply(
-            lambda x: x.to_list()
-        )
-        multiline_df = multiline_df.reset_index()
+def __read_route_shapes(gtfs):
+    # get_shapeids_on route
+    shape_ids_on_routes = gtfs.trips[["route_id", "shape_id"]].drop_duplicates().dropna(
+        subset=["shape_id"]
+    ).sort_values(["route_id", "shape_id"])
 
-        # join routes
-        multiline_df = pd.merge(
-            multiline_df,
-            gtfs.routes[["route_id", "route_long_name", "route_short_name"]],
-            on="route_id",
-        )
+    # get shape coordinate
+    shapes_df = gtfs.shapes.copy()
+    shapes_df["shape_pt"] = list(zip(shapes_df["shape_pt_lon"], shapes_df["shape_pt_lat"]))
+    shapes_df = shapes_df.sort_values(["shape_id", "shape_pt_sequence"])
+    shape_lines = shapes_df.groupby("shape_id")["shape_pt"].apply(
+        lambda x: x.tolist()
+    ).rename("line")
 
-        # join route_names
-        multiline_df["route_name"] = multiline_df["route_long_name"].fillna(
-            ""
-        ) + multiline_df["route_short_name"].fillna("")
+    # merge
+    route_line_df = pd.merge(shape_ids_on_routes, shape_lines, on="shape_id")
+    route_lines = route_line_df.set_index("route_id")["line"]
 
-        # to GeoJSON-Feature
-        features = [
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "MultiLineString",
-                    "coordinates": row["shape_line"],
-                },
-                "properties": {
-                    "route_id": row["route_id"],
-                    "route_name": row["route_name"],
-                },
-            }
-            for _, row in multiline_df.iterrows()
-        ]
+    features = __route_lines_to_features(route_lines, gtfs.routes)
 
-        # load shapes unloaded yet
-        unloaded_shapes = gtfs.shapes[
-            ~gtfs.shapes["shape_id"].isin(shape_ids_on_routes["shape_id"].unique())
-        ]
+    # load shapes unloaded yet
+    unloaded_shape_lines = shape_lines[
+        ~shape_lines.index.isin(shape_ids_on_routes["shape_id"].unique())
+    ]
+    if len(unloaded_shape_lines) > 0:
+        # fill id, name with shape_id, line to multiline
+        multiline_df = pd.DataFrame({
+            "route_id": None,
+            "route_name": unloaded_shape_lines.index,
+            "multiline": unloaded_shape_lines.apply(lambda x: [x])
+        })
 
-        if len(unloaded_shapes) > 0:
-            unloaded_shapes["shape_pt"] = unloaded_shapes.apply(
-                lambda x: (x["shape_pt_lon"], x["shape_pt_lat"]), axis=1
-            )
-            # group by shape_id into LineString
-            unloaded_shapes = unloaded_shapes.groupby("shape_id")["shape_pt"].apply(
-                lambda x: x.tolist()
-            )
-            unloaded_shapes = unloaded_shapes.reset_index()
-            unloaded_shapes.rename(columns={"shape_pt": "shape_line"}, inplace=True)
+        unloaded_features = __route_multiline_df_to_features(multiline_df)
+        features.extend(unloaded_features)
+    return features
 
-            # group by route_id into MultiLineString
-            unloaded_shapes = unloaded_shapes.groupby(["shape_id"])["shape_line"].apply(
-                lambda x: x.to_list()
-            )
-            unloaded_shapes = unloaded_shapes.reset_index()
 
-            # fill id, name with shape_id
-            unloaded_shapes["route_id"] = None
-            unloaded_shapes["route_name"] = unloaded_shapes["shape_id"]
+def __read_routes_ignore_shapes(gtfs):
+    # generate stop patterns
+    sorted_stop_times = gtfs.stop_times.sort_values(["trip_id", "stop_sequence"])
+    trip_stop_pattern = sorted_stop_times.groupby("trip_id")["stop_id"].agg(tuple).rename("stop_pattern")
 
-            # to GeoJSON-Feature
-            unloaded_features = [
-                {
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "MultiLineString",
-                        "coordinates": row["shape_line"],
-                    },
-                    "properties": {
-                        "route_id": row["route_id"],
-                        "route_name": row["route_name"],
-                    },
-                }
-                for _, row in unloaded_shapes.iterrows()
-            ]
-            features.extend(unloaded_features)
+    # unique stop pattens by route_id
+    route_trip_stop_pattern = pd.merge(
+        trip_stop_pattern,
+        gtfs.trips[["trip_id", "route_id"]],
+        on='trip_id'
+    )
+    route_stop_patterns = route_trip_stop_pattern[["route_id", "stop_pattern"]].drop_duplicates()
 
-        return features
+    # explode stop patterns to stop ids
+    route_stop_patterns["stop_id"] = route_stop_patterns["stop_pattern"]
+    route_stop_ids = route_stop_patterns.explode("stop_id")
+
+    # append geometry to stops
+    stop_geoms = pd.Series(
+        data=zip(gtfs.stops["stop_lon"], gtfs.stops["stop_lat"]),
+        name="stop_pt",
+        index=gtfs.stops["stop_id"]
+    )
+
+    # join geomtry to route stops
+    route_stop_ids["order"] = range(len(route_stop_ids))
+    route_stop_geoms = pd.merge(
+        route_stop_ids,
+        stop_geoms,
+        on="stop_id",
+    ).sort_values("order")
+
+    # Point -> LineString: group by route_id and stop_pattern
+    route_lines = route_stop_geoms.groupby(["route_id", "stop_pattern"])["stop_pt"].agg(list)
+    return __route_lines_to_features(route_lines, gtfs.routes)
+
+
+def __route_lines_to_features(route_lines, routes):
+    # group by route_id into MultiLineString
+    multilines = route_lines.groupby(['route_id']).apply(
+        lambda x: x.tolist()
+    ).rename("multiline")
+    # join route_id and route_name
+    multiline_df = pd.merge(
+        multilines,
+        routes[["route_id", "route_long_name", "route_short_name"]],
+        on="route_id",
+    )
+    multiline_df["route_name"] = multiline_df["route_long_name"].fillna(
+        ""
+    ) + multiline_df["route_short_name"].fillna("")
+
+    return __route_multiline_df_to_features(multiline_df)
+
+
+def __route_multiline_df_to_features(multiline_df):
+    dicts = multiline_df.to_dict(orient="records")
+    features = [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "MultiLineString",
+                "coordinates": row["multiline"],
+            },
+            "properties": {
+                "route_id": row["route_id"],
+                "route_name": row["route_name"],
+            },
+        }
+        for row in dicts
+    ]
+    return features
