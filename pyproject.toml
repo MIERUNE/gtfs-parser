@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gtfs_parser"
-version = "0.2.1"
+version = "0.2.2"
 description = "parse and aggregate GTFS"
 authors = ["MIERUNE Inc.", "Kanahiro IGUCHI"]
 license = "MIT"
