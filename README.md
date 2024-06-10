@@ -12,7 +12,21 @@ pip install gtfs-parser
 
 ## API
 
-TODO
+```python
+import gtfs_parser
+
+# construct GTFS object
+gtfs = gtfs_parser.GTFSFactory(zip_path)
+
+# parse as GeoJSON
+stops = gtfs_parser.parse.read_stops(gtfs)
+routes = gtfs_parser.parse.read_routes(gtfs)
+
+# aggregate frequency
+aggregator = gtfs_parser.aggregate.Aggregator(gtfs, yyyymmdd=yyyymmdd)
+interpolated_stops = aggregator.read_interpolated_stops()
+route_freq = aggregator.read_route_frequency()
+```
 
 ## CLI
 
