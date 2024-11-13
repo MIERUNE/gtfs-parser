@@ -63,3 +63,7 @@ gtfs-parser parse gtfs_dir output --parse_ignoreshapes
 gtfs-parser aggregate gtfs.zip output
 gtfs-parser aggregate gtfs_dir output --aggregate_nounifystops
 ```
+
+## Authors
+
+- Kanahiro Iguchi ([@Kanahiro](https://github.com/Kanahiro)) - original author
