@@ -67,3 +67,4 @@ gtfs-parser aggregate gtfs_dir output --aggregate_nounifystops
 ## Authors
 
 - Kanahiro Iguchi ([@Kanahiro](https://github.com/Kanahiro)) - original author
+- Kohei Ota ([@takohei](https://github.com/takohei))
