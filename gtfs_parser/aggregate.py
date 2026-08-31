@@ -214,7 +214,7 @@ class Aggregator:
             on="stop_id",
             how="left"
         )
-        similar_pass_count = stop_pass_count.groupby("similar_stop_id").sum("count").astype(int)
+        similar_pass_count = stop_pass_count.groupby("similar_stop_id")[["count"]].sum().astype(int)
         similar_stop_summary = self.similar_stops.merge(similar_pass_count,
                                                         on="similar_stop_id")
 
