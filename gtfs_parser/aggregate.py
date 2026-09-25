@@ -19,6 +19,7 @@ class Aggregator:
     Returns:
         [type]: [description]
     """
+
     def __init__(
         self,
         gtfs: GTFS,
@@ -31,12 +32,18 @@ class Aggregator:
     ):
         self.gtfs = gtfs
 
-        self.stop_times = Aggregator.__filter_stop_times(self.gtfs, yyyymmdd, begin_time, end_time)
+        self.stop_times = Aggregator.__filter_stop_times(
+            self.gtfs, yyyymmdd, begin_time, end_time
+        )
 
         if no_unify_stops:
-            similar_results = Aggregator.__get_similar_stop_without_unifying(self.gtfs.stops)
+            similar_results = Aggregator.__get_similar_stop_without_unifying(
+                self.gtfs.stops
+            )
         else:
-            similar_results = Aggregator.__unify_similar_stops(self.gtfs.stops, delimiter, max_distance_degree)
+            similar_results = Aggregator.__unify_similar_stops(
+                self.gtfs.stops, delimiter, max_distance_degree
+            )
         self.similar_stops, self.stop_relations = similar_results
 
     @staticmethod
@@ -54,12 +61,15 @@ class Aggregator:
             # departure_time is nullable and expressed in "hh:mm:ss" or "h:mm:ss" format.
             # Hour can be mor than 24.
             # Therefore, drop null records and convert times to integers.
-            filtered_stop_times = filtered_stop_times[~filtered_stop_times["departure_time"].isnull()]
+            filtered_stop_times = filtered_stop_times[
+                ~filtered_stop_times["departure_time"].isnull()
+            ]
             int_dep_times = filtered_stop_times.departure_time.str.replace(
                 ":", ""
             ).astype(int)
-            filtered_stop_times = filtered_stop_times[(int_dep_times >= int(begin_time))
-                                                      & (int_dep_times < int(end_time))]
+            filtered_stop_times = filtered_stop_times[
+                (int_dep_times >= int(begin_time)) & (int_dep_times < int(end_time))
+            ]
         return filtered_stop_times
 
     @staticmethod
@@ -68,15 +78,16 @@ class Aggregator:
             stops = stops[stops["location_type"] == 0]
         similar_stops_centroid = stops[["stop_lon", "stop_lat"]].values.tolist()
 
-        similar_stops = pd.DataFrame({
-            "similar_stop_id": stops["stop_id"],
-            "similar_stop_name": stops["stop_name"],
-            "similar_stops_centroid": similar_stops_centroid,
-        })
-        similar_relations = pd.concat([
-            stops["stop_id"],
-            similar_stops["similar_stop_id"]
-        ], axis=1)
+        similar_stops = pd.DataFrame(
+            {
+                "similar_stop_id": stops["stop_id"],
+                "similar_stop_name": stops["stop_name"],
+                "similar_stops_centroid": similar_stops_centroid,
+            }
+        )
+        similar_relations = pd.concat(
+            [stops["stop_id"], similar_stops["similar_stop_id"]], axis=1
+        )
         return similar_stops, similar_relations
 
     @staticmethod
@@ -96,10 +107,14 @@ class Aggregator:
             solo_stops = stops
 
         # unify solo stops
-        solo_similar_stops, solo_id_pair = Aggregator.__unify_solo_stops(solo_stops, delimiter, max_distance_degree)
+        solo_similar_stops, solo_id_pair = Aggregator.__unify_solo_stops(
+            solo_stops, delimiter, max_distance_degree
+        )
 
         # concat similar stops
-        return pd.concat([child_similar_stop, solo_similar_stops]), pd.concat([child_id_pair, solo_id_pair])
+        return pd.concat([child_similar_stop, solo_similar_stops]), pd.concat(
+            [child_id_pair, solo_id_pair]
+        )
 
     @staticmethod
     def __unify_child_stops(stops):
@@ -108,21 +123,28 @@ class Aggregator:
             & (stops["location_type"] == 0)
         ][["stop_id", "parent_station"]]
 
-        child_id_pair.rename(columns={"parent_station": "similar_stop_id"}, inplace=True)
+        child_id_pair.rename(
+            columns={"parent_station": "similar_stop_id"}, inplace=True
+        )
 
         similar_ids = child_id_pair["similar_stop_id"].unique()
 
-        similar_stops = stops[stops["stop_id"].isin(similar_ids)][["stop_id", "stop_name", "stop_lon", "stop_lat"]]
+        similar_stops = stops[stops["stop_id"].isin(similar_ids)][
+            ["stop_id", "stop_name", "stop_lon", "stop_lat"]
+        ]
 
         similar_stops["similar_stops_centroid"] = similar_stops[
             ["stop_lon", "stop_lat"]
         ].values.tolist()
         similar_stops.drop(columns=["stop_lon", "stop_lat"], inplace=True)
 
-        similar_stops.rename(columns={
-            "stop_id": "similar_stop_id",
-            "stop_name": "similar_stop_name",
-        }, inplace=True)
+        similar_stops.rename(
+            columns={
+                "stop_id": "similar_stop_id",
+                "stop_name": "similar_stop_name",
+            },
+            inplace=True,
+        )
 
         return similar_stops, child_id_pair
 
@@ -131,19 +153,28 @@ class Aggregator:
         delimited_id_pair = []
         if delimiter:
             # unify by delimiter
-            stop_id_delimited = solo_stops["stop_id"].str.split(delimiter).str[0].rename("similar_stop_id")
-            delimited_id_pair = pd.concat([solo_stops["stop_id"], stop_id_delimited], axis=1)[
-                solo_stops["stop_id"] != stop_id_delimited
-            ]
+            stop_id_delimited = (
+                solo_stops["stop_id"]
+                .str.split(delimiter)
+                .str[0]
+                .rename("similar_stop_id")
+            )
+            delimited_id_pair = pd.concat(
+                [solo_stops["stop_id"], stop_id_delimited], axis=1
+            )[solo_stops["stop_id"] != stop_id_delimited]
         if len(delimited_id_pair) == len(solo_stops):
             solo_id_pair = delimited_id_pair
         else:
             # unify by distance
             if len(delimited_id_pair) > 0:
-                undelimited_stops = solo_stops[~solo_stops["stop_id"].isin(delimited_id_pair["stop_id"])]
+                undelimited_stops = solo_stops[
+                    ~solo_stops["stop_id"].isin(delimited_id_pair["stop_id"])
+                ]
             else:
                 undelimited_stops = solo_stops
-            near_id_pair = Aggregator.__calc_near_id_pair(undelimited_stops, max_distance_degree)
+            near_id_pair = Aggregator.__calc_near_id_pair(
+                undelimited_stops, max_distance_degree
+            )
 
             if len(delimited_id_pair) == 0:
                 solo_id_pair = near_id_pair
@@ -155,12 +186,14 @@ class Aggregator:
 
         # calc similar stop attributes
         solo_stops_with_similar = pd.merge(solo_stops, solo_id_pair, on="stop_id")
-        solo_similar_stops = solo_stops_with_similar.groupby("similar_stop_id").agg({
-            'stop_name': 'min',
-            'stop_lon': 'mean',
-            'stop_lat': 'mean'
-        }).reset_index()
-        solo_similar_stops.rename(columns={"stop_name": "similar_stop_name"}, inplace=True)
+        solo_similar_stops = (
+            solo_stops_with_similar.groupby("similar_stop_id")
+            .agg({"stop_name": "min", "stop_lon": "mean", "stop_lat": "mean"})
+            .reset_index()
+        )
+        solo_similar_stops.rename(
+            columns={"stop_name": "similar_stop_name"}, inplace=True
+        )
         solo_similar_stops["similar_stops_centroid"] = solo_similar_stops[
             ["stop_lon", "stop_lat"]
         ].values.tolist()
@@ -170,15 +203,12 @@ class Aggregator:
     @staticmethod
     def __calc_near_id_pair(solo_stops, max_distance_degree):
         stop_matrix = pd.merge(
-            solo_stops,
-            solo_stops,
-            on="stop_name",
-            suffixes=("", "_r")
+            solo_stops, solo_stops, on="stop_name", suffixes=("", "_r")
         )
         near_matrix = stop_matrix[
             (stop_matrix["stop_lon"] - stop_matrix["stop_lon_r"]) ** 2
             + (stop_matrix["stop_lat"] - stop_matrix["stop_lat_r"]) ** 2
-            <= max_distance_degree ** 2
+            <= max_distance_degree**2
         ]
 
         near_matrix = near_matrix[["stop_id", "stop_id_r"]]
@@ -192,16 +222,22 @@ class Aggregator:
     Join near groups of stops.
     Trace root stops up to 5 times and modify root id.
     """
+
     @staticmethod
     def __join_near_group(near_id_pair):
-        for i in range(5):
-            leaf_pair = near_id_pair.query("stop_id != stop_id_r")\
-                .rename(columns={"stop_id": "stop_id_r", "stop_id_r": "stop_id_r2"})
-            sub_pair = pd.merge(near_id_pair, leaf_pair, on="stop_id_r").drop(columns=["stop_id_r"])
+        for _ in range(5):
+            leaf_pair = near_id_pair.query("stop_id != stop_id_r").rename(
+                columns={"stop_id": "stop_id_r", "stop_id_r": "stop_id_r2"}
+            )
+            sub_pair = pd.merge(near_id_pair, leaf_pair, on="stop_id_r").drop(
+                columns=["stop_id_r"]
+            )
             if len(sub_pair) == 0:
                 break
             mod_id_trio = pd.merge(near_id_pair, sub_pair, on="stop_id", how="left")
-            mod_id_trio.loc[~mod_id_trio['stop_id_r2'].isna(), 'stop_id_r'] = mod_id_trio['stop_id_r2']
+            mod_id_trio.loc[~mod_id_trio["stop_id_r2"].isna(), "stop_id_r"] = (
+                mod_id_trio["stop_id_r2"]
+            )
             near_id_pair = mod_id_trio.drop(columns=["stop_id_r2"])
 
         return near_id_pair
@@ -209,14 +245,14 @@ class Aggregator:
     def read_interpolated_stops(self):
         stop_pass_count = self.stop_times.groupby("stop_id").size().rename("count")
         stop_pass_count = pd.merge(
-            self.stop_relations,
-            stop_pass_count,
-            on="stop_id",
-            how="left"
+            self.stop_relations, stop_pass_count, on="stop_id", how="left"
         )
-        similar_pass_count = stop_pass_count.groupby("similar_stop_id")[["count"]].sum().astype(int)
-        similar_stop_summary = self.similar_stops.merge(similar_pass_count,
-                                                        on="similar_stop_id")
+        similar_pass_count = (
+            stop_pass_count.groupby("similar_stop_id")[["count"]].sum().astype(int)
+        )
+        similar_stop_summary = self.similar_stops.merge(
+            similar_pass_count, on="similar_stop_id"
+        )
 
         stop_dicts = similar_stop_summary.to_dict(orient="records")
 
@@ -253,29 +289,29 @@ class Aggregator:
         stop_times_df = pd.merge(
             self.stop_times[["trip_id", "stop_sequence", "stop_id"]],
             self.stop_relations,
-            on="stop_id"
+            on="stop_id",
         )
         # append agency_id
         trip_agency_df = pd.merge(
             self.gtfs.trips[["trip_id", "route_id"]],
             self.gtfs.routes[["route_id", "agency_id"]],
-            on="route_id"
+            on="route_id",
         )
-        stop_times_df = pd.merge(
-            stop_times_df,
-            trip_agency_df,
-            on="trip_id"
-        )
+        stop_times_df = pd.merge(stop_times_df, trip_agency_df, on="trip_id")
         stop_times_df = stop_times_df.sort_values(["trip_id", "stop_sequence"])
 
         # generate path by joining next stop_times
         stop_times_df["next_stop_id"] = stop_times_df["similar_stop_id"].shift(-1)
         stop_times_df["next_trip_id"] = stop_times_df["trip_id"].shift(-1)
-        stop_times_df = stop_times_df[stop_times_df["trip_id"] == stop_times_df["next_trip_id"]]
+        stop_times_df = stop_times_df[
+            stop_times_df["trip_id"] == stop_times_df["next_trip_id"]
+        ]
         path_df = stop_times_df.rename(columns={"similar_stop_id": "prev_stop_id"})
 
         # count frequency
-        path_freq_sr = path_df.groupby(["agency_id", "prev_stop_id", "next_stop_id"]).size()
+        path_freq_sr = path_df.groupby(
+            ["agency_id", "prev_stop_id", "next_stop_id"]
+        ).size()
         path_freq_sr.name = "frequency"
         path_freq_df = path_freq_sr.reset_index()
 
@@ -285,18 +321,19 @@ class Aggregator:
                 path_freq_df,
                 self.similar_stops,
                 left_on=f"{order}_stop_id",
-                right_on="similar_stop_id"
+                right_on="similar_stop_id",
             )
-            path_freq_df.rename(columns={
-                "similar_stop_name": f"{order}_stop_name",
-                "similar_stops_centroid": f"{order}_similar_stops_centroid"
-            }, inplace=True)
+            path_freq_df.rename(
+                columns={
+                    "similar_stop_name": f"{order}_stop_name",
+                    "similar_stops_centroid": f"{order}_similar_stops_centroid",
+                },
+                inplace=True,
+            )
             path_freq_df.drop(columns="similar_stop_id", inplace=True)
 
         path_freq_df = pd.merge(
-            path_freq_df,
-            self.gtfs.agency[["agency_id", "agency_name"]],
-            on="agency_id"
+            path_freq_df, self.gtfs.agency[["agency_id", "agency_name"]], on="agency_id"
         )
         # convert to features
         path_freq_dict = path_freq_df.to_dict(orient="records")
@@ -322,7 +359,7 @@ class Aggregator:
             }
             for path in path_freq_dict
         ]
-    
+
     @staticmethod
     def __get_trips_on_a_date(gtfs, yyyymmdd: str):
         """
@@ -346,12 +383,8 @@ class Aggregator:
             # generate an empty series if calendar.txt is missing because it is not required.
             service_ids_on = pd.Series(name="service_id", dtype=str)
         else:
-            calendar = gtfs.calendar.astype(
-                {"start_date": int, "end_date": int}
-            )
-            calendar = calendar[
-                calendar[day_of_week] == "1"
-            ]
+            calendar = gtfs.calendar.astype({"start_date": int, "end_date": int})
+            calendar = calendar[calendar[day_of_week] == "1"]
             calendar = calendar.query(
                 f"start_date <= {int(yyyymmdd)} and {int(yyyymmdd)} <= end_date",
                 engine="python",
@@ -360,9 +393,9 @@ class Aggregator:
 
         # filter services by dates
         if gtfs.calendar_dates is not None:
-            filtered = gtfs.calendar_dates[
-                gtfs.calendar_dates["date"] == yyyymmdd
-            ][["service_id", "exception_type"]]
+            filtered = gtfs.calendar_dates[gtfs.calendar_dates["date"] == yyyymmdd][
+                ["service_id", "exception_type"]
+            ]
             to_be_removed_service_ids = filtered[filtered["exception_type"] == "2"][
                 "service_id"
             ]
@@ -376,23 +409,20 @@ class Aggregator:
             service_ids_on = pd.concat([service_ids_on, to_be_appended_services_ids])
 
         # filter trips
-        trips_in_services = gtfs.trips[
-            gtfs.trips["service_id"].isin(service_ids_on)
-        ]
+        trips_in_services = gtfs.trips[gtfs.trips["service_id"].isin(service_ids_on)]
 
         return trips_in_services["trip_id"]
 
     def read_stop_relations(self) -> list:
         stop_relation_df = pd.merge(
-            self.stop_relations,
-            self.gtfs.stops[["stop_id", "stop_name"]],
-            on="stop_id"
+            self.stop_relations, self.gtfs.stops[["stop_id", "stop_name"]], on="stop_id"
         )
         stop_relation_df = pd.merge(
             stop_relation_df,
             self.similar_stops,
             on="similar_stop_id",
         )
-        stop_relation_df = stop_relation_df.reindex(columns=["stop_id", "stop_name",
-                                                             "similar_stop_id", "similar_stop_name"])
+        stop_relation_df = stop_relation_df.reindex(
+            columns=["stop_id", "stop_name", "similar_stop_id", "similar_stop_name"]
+        )
         return stop_relation_df.to_dict(orient="records")

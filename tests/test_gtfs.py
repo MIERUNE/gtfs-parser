@@ -2,7 +2,6 @@ import os
 
 import pandas as pd
 
-
 from gtfs_parser.gtfs import GTFSFactory
 
 
