@@ -12,15 +12,15 @@ jobs:
         permissions:
             id-token: write
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             - name: Set up uv
-              uses: astral-sh/setup-uv@v7
+              uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
             - name: build
               run: uv build
 
             - name: publish
-              uses: pypa/gh-action-pypi-publish@release/v1
+              uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
               with:
                   password: ${{ secrets.PYPI_APITOKEN }}
