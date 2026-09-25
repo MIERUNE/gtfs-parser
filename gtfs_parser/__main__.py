@@ -1,10 +1,10 @@
+import argparse
 import json
 import os
-import argparse
 
+from .aggregate import Aggregator
 from .gtfs import GTFSFactory
 from .parse import read_routes, read_stops
-from .aggregate import Aggregator
 
 
 def load_args():
@@ -24,12 +24,11 @@ def load_args():
 
 
 def validate_args(args):
-    if args.aggregate_yyyymmdd:
-        if len(args.aggregate_yyyymmdd) != 8:
-            raise RuntimeError(
-                f"yyyymmdd must be 8 characters string, for example 20210401, \
-                    your is {args.aggregate_yyyymmdd} ({len(args.aggregate_yyyymmdd)} characters)"
-            )
+    if args.aggregate_yyyymmdd and len(args.aggregate_yyyymmdd) != 8:
+        raise RuntimeError(
+            f"yyyymmdd must be 8 characters string, for example 20210401, \
+                your is {args.aggregate_yyyymmdd} ({len(args.aggregate_yyyymmdd)} characters)"
+        )
 
     if args.aggregate_begintime:
         if len(args.aggregate_begintime) != 6:

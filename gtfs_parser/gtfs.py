@@ -1,7 +1,7 @@
 import glob
+import io
 import os
 import zipfile
-import io
 from dataclasses import dataclass, fields
 from typing import Optional
 
@@ -33,6 +33,7 @@ class GTFS:
     reference: https://gtfs.org/schedule/reference/
     reference for Japan: https://www.mlit.go.jp/common/001283244.pdf
     """
+
     agency: pd.DataFrame
     routes: pd.DataFrame
     stop_times: pd.DataFrame

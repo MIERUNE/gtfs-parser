@@ -64,6 +64,15 @@ gtfs-parser aggregate gtfs.zip output
 gtfs-parser aggregate gtfs_dir output --aggregate_nounifystops
 ```
 
+## Development
+
+```sh
+uv sync
+uv run pytest
+uv run ruff check
+uv run ruff format
+```
+
 ## Authors
 
 - Kanahiro Iguchi ([@Kanahiro](https://github.com/Kanahiro)) - original author
