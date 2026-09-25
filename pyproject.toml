@@ -1,6 +1,6 @@
 [project]
 name = "gtfs_parser"
-version = "0.2.2"
+version = "0.3.0"
 description = "parse and aggregate GTFS"
 authors = [{ name = "MIERUNE Inc." }, { name = "Kanahiro IGUCHI" }]
 license = "MIT"
