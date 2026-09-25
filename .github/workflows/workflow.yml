@@ -12,20 +12,15 @@ jobs:
         permissions:
             id-token: write
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v5
 
-            - uses: actions/setup-python@v4
-              with:
-                  python-version: '3.9'
-
-            - name: deps
-              run: python -m pip install -U poetry
+            - name: Set up uv
+              uses: astral-sh/setup-uv@v7
 
             - name: build
-              run: poetry build
+              run: uv build
 
             - name: publish
-              # gh-action-pypi-publish uses TWINE_PASSWORD automatically
               uses: pypa/gh-action-pypi-publish@release/v1
               with:
                   password: ${{ secrets.PYPI_APITOKEN }}
