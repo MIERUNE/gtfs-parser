@@ -171,11 +171,11 @@ def __route_lines_to_features(route_lines, routes):
         .rename("multiline")
     )
     # join route_id and route_name
-    multiline_df = pd.merge(
-        multilines,
-        routes[["route_id", "route_long_name", "route_short_name"]],
-        on="route_id",
-    )
+    route_columns = ["route_id", "route_long_name", "route_short_name"]
+    if "route_color" in routes.columns:
+        route_columns.append("route_color")
+
+    multiline_df = pd.merge(multilines, routes[route_columns], on="route_id")
     multiline_df["route_name"] = multiline_df["route_long_name"].fillna(
         ""
     ) + multiline_df["route_short_name"].fillna("")
@@ -195,6 +195,9 @@ def __route_multiline_df_to_features(multiline_df):
             "properties": {
                 "route_id": row["route_id"],
                 "route_name": row["route_name"],
+                "route_color": None
+                if pd.isna(row.get("route_color"))
+                else row.get("route_color"),
             },
         }
         for row in dicts

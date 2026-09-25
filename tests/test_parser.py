@@ -56,3 +56,29 @@ def test_read_routes_ignore_shapes(gtfs):
     # num of features in routes.geojson depends on not shapes.txt but routes.txt
     routes_features_noshapes = read_routes(gtfs, ignore_shapes=True)
     assert 32 == len(routes_features_noshapes)
+
+
+def test_read_routes_with_route_color(gtfs):
+    routes_features = read_routes(gtfs)
+    feature = __find_feature_by({"route_id": "12_A"}, routes_features)
+
+    assert feature is not None
+    assert feature["properties"]["route_color"] == "FF0000"
+
+
+def test_read_routes_without_route_color_column(gtfs):
+    gtfs.routes = gtfs.routes.drop(columns=["route_color"])
+    routes_features = read_routes(gtfs)
+    feature = __find_feature_by({"route_id": "12_A"}, routes_features)
+
+    assert feature is not None
+    assert feature["properties"]["route_color"] is None
+
+
+def test_read_routes_with_empty_route_color(gtfs):
+    gtfs.routes.loc[gtfs.routes["route_id"] == "12_A", "route_color"] = None
+    routes_features = read_routes(gtfs)
+    feature = __find_feature_by({"route_id": "12_A"}, routes_features)
+
+    assert feature is not None
+    assert feature["properties"]["route_color"] is None
